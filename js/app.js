@@ -1,10 +1,11 @@
 /* ==========================================================================
    HVP Procesturing — besturing van de bouwteamfase Nulelie
+   Hiërarchie: Project ▸ APD ▸ Werkpakket. Data via Neon (db.js) met
+   localStorage-cache. AI-rapportages via ai.js.
    ========================================================================== */
 
 'use strict';
 
-const STORAGE_KEY = 'hvp-processturing-v1';
 const STATUSSEN = {
   open:        { label: 'Niet gestart', kleur: '#94a3b8' },
   bezig:       { label: 'Bezig',        kleur: '#0ea5e9' },
@@ -13,15 +14,25 @@ const STATUSSEN = {
   nvt:         { label: 'N.v.t.',       kleur: '#cbd5e1' },
 };
 
-const VANDAAG = new Date('2026-06-19'); // huidige peildatum
+const STANDAARD_PEILDATUM = '2026-06-19';
+let VANDAAG = new Date(STANDAARD_PEILDATUM);
+
+const HORIZONS = [
+  { id: '14',       label: '2 weken',     dagen: 14 },
+  { id: '30',       label: '30 dagen',    dagen: 30 },
+  { id: '60',       label: '60 dagen',    dagen: 60 },
+  { id: '90',       label: '90 dagen',    dagen: 90 },
+  { id: 'maand',    label: 'Deze maand' },
+  { id: 'kwartaal', label: 'Dit kwartaal' },
+];
 
 /* ---------------------------- Datum-helpers ------------------------------ */
 function parseDatum(s) {
   if (!s) return null;
   s = String(s).trim();
-  let m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);        // dd-mm-yyyy
+  let m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);            // yyyy-mm-dd
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
   return null;
 }
@@ -31,54 +42,58 @@ function fmtDatum(d) {
   if (!d || isNaN(d)) return '—';
   return d.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' });
 }
+function isoDatum(d) { return d.toISOString().slice(0, 10); }
+function dagenVerschil(a, b) { return Math.round((b - a) / 864e5); }
 
 /* --------------------------- Applicatiestaat ----------------------------- */
 const State = {
-  werkpakketten: [],   // lijst van WP-objecten
-  voortgang: {},       // wpId -> { activiteitcode -> {status, notitie} }
-  doorlooptijden: {},  // activiteitcode -> werkdagen (override op standaard)
-  bron: 'seed',        // 'seed' (voorbeelddata) of 'import' (eigen CSV/JSON)
-  filters: { project: '', engineer: '', fase: '', zoek: '' },
+  werkpakketten: [],
+  voortgang: {},
+  doorlooptijden: {},
+  snapshots: [],
+  instellingen: {},
+  filters: { project: '', apd: '', engineer: '', fase: '', zoek: '' },
   actiefWp: null,
+  horizon: '30',
+  dashScope: 'portfolio',
 
-  laad() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      this.voortgang = raw.voortgang || {};
-      this.doorlooptijden = raw.doorlooptijden || {};
-      this.bron = raw.bron || 'seed';
-      // Voorbeelddata altijd verversen vanuit seed.js; eigen import behouden.
-      this.werkpakketten = (this.bron === 'import' && raw.werkpakketten && raw.werkpakketten.length)
-        ? raw.werkpakketten
-        : (window.SEED_WERKPAKKETTEN || []);
-    } catch (e) {
-      this.bron = 'seed';
-      this.werkpakketten = window.SEED_WERKPAKKETTEN || [];
-      this.voortgang = {};
-      this.doorlooptijden = {};
+  async laad() {
+    const staat = await DB.laad();
+    this.voortgang = staat.voortgang || {};
+    this.doorlooptijden = staat.doorlooptijden || {};
+    this.snapshots = staat.snapshots || [];
+    this.instellingen = staat.instellingen || {};
+    this.werkpakketten = (staat.werkpakketten && staat.werkpakketten.length)
+      ? staat.werkpakketten
+      : (window.SEED_WERKPAKKETTEN || []);
+    if (this.instellingen.peildatum) {
+      const d = parseDatum(this.instellingen.peildatum);
+      if (d) VANDAAG = d;
     }
   },
   bewaar() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    DB.bewaar({
       werkpakketten: this.werkpakketten,
       voortgang: this.voortgang,
       doorlooptijden: this.doorlooptijden,
-      bron: this.bron,
-    }));
+      snapshots: this.snapshots,
+      instellingen: this.instellingen,
+    });
   },
   wpVoortgang(wpId) {
     if (!this.voortgang[wpId]) this.voortgang[wpId] = {};
     return this.voortgang[wpId];
   },
-  // effectieve doorlooptijd (werkdagen): override of standaard uit het model
   getDt(code) {
     if (this.doorlooptijden[code] != null && this.doorlooptijden[code] !== '') return +this.doorlooptijden[code];
     return ACTIVITEIT_INDEX[code] ? ACTIVITEIT_INDEX[code].activiteit.dtDefault : 5;
   },
+  model() { return this.instellingen.model || 'claude-opus-4-8'; },
 };
 
+function apdVan(w) { return (w.apd || '').trim() || '—'; }
+
 /* ----------------------- Afgeleide berekeningen -------------------------- */
-// Bepaal de fase waarin een werkpakket zich op de peildatum bevindt o.b.v. planning.
 function huidigeFase(wp) {
   const spans = FASES.map((f) => ({
     fase: f,
@@ -86,31 +101,27 @@ function huidigeFase(wp) {
     eind: parseDatum(wp.mijlpalen[f.eindMijlpaal]),
   })).filter((s) => s.start && s.eind);
   if (!spans.length) return { status: 'onbekend', fase: null };
-
   const eersteStart = spans[0].start;
   const laatsteEind = spans[spans.length - 1].eind;
   if (VANDAAG < eersteStart) return { status: 'gepland', fase: spans[0].fase };
   if (VANDAAG > laatsteEind) return { status: 'afgerond', fase: spans[spans.length - 1].fase };
-  for (const s of spans) {
-    if (VANDAAG >= s.start && VANDAAG <= s.eind) return { status: 'lopend', fase: s.fase };
-  }
-  // tussen twee spans (gat) -> pak de eerstvolgende fase
+  for (const s of spans) if (VANDAAG >= s.start && VANDAAG <= s.eind) return { status: 'lopend', fase: s.fase };
   for (const s of spans) if (VANDAAG < s.start) return { status: 'lopend', fase: s.fase };
   return { status: 'lopend', fase: spans[spans.length - 1].fase };
 }
 
-// Voortgang o.b.v. handmatig afgevinkte activiteiten (gereed/n.v.t. tellen mee).
 function activiteitVoortgang(wp) {
   const v = State.voortgang[wp.id] || {};
-  let totaal = 0, klaar = 0, geblokkeerd = 0;
+  let totaal = 0, klaar = 0, geblokkeerd = 0, bezig = 0;
   FASES.forEach((f) => f.activiteiten.forEach((a) => {
     const st = (v[a.code] && v[a.code].status) || 'open';
-    if (st === 'nvt') return;            // telt niet mee in noemer
+    if (st === 'nvt') return;
     totaal++;
     if (st === 'gereed') klaar++;
     if (st === 'geblokkeerd') geblokkeerd++;
+    if (st === 'bezig') bezig++;
   }));
-  return { totaal, klaar, geblokkeerd, pct: totaal ? Math.round((klaar / totaal) * 100) : 0 };
+  return { totaal, klaar, geblokkeerd, bezig, pct: totaal ? Math.round((klaar / totaal) * 100) : 0 };
 }
 
 function faseVoortgang(wp, fase) {
@@ -128,7 +139,7 @@ function faseVoortgang(wp, fase) {
 /* --------------------- Doorlooptijden / werkdagen ------------------------ */
 function isWerkdag(d) { const g = d.getDay(); return g !== 0 && g !== 6; }
 function werkdagenTussen(a, b) {
-  if (!a || !b) return 0;
+  if (!a || !b || b <= a) return 0;
   let d = new Date(a), n = 0;
   while (d < b) { if (isWerkdag(d)) n++; d.setDate(d.getDate() + 1); }
   return n;
@@ -138,16 +149,18 @@ function plusWerkdagen(start, dagen) {
   while (toe < dagen) { d.setDate(d.getDate() + 1); if (isWerkdag(d)) toe++; }
   return d;
 }
+function minWerkdagen(eind, dagen) {
+  const d = new Date(eind); let toe = 0;
+  while (toe < dagen) { d.setDate(d.getDate() - 1); if (isWerkdag(d)) toe++; }
+  return d;
+}
 
-// Plan de activiteiten van een fase sequentieel binnen het planningsvenster.
-// Geeft inzicht of de doorlooptijden binnen de beschikbare tijd passen.
 function faseSchema(wp, fase) {
   const start = parseDatum(wp.mijlpalen[fase.startMijlpaal]);
   const eind = parseDatum(wp.mijlpalen[fase.eindMijlpaal]);
   if (!start || !eind) return null;
   const beschikbaar = werkdagenTussen(start, eind);
-  let benodigd = 0;
-  let cursor = new Date(start);
+  let benodigd = 0, cursor = new Date(start);
   const items = fase.activiteiten.map((a) => {
     const dt = State.getDt(a.code);
     benodigd += dt;
@@ -159,7 +172,6 @@ function faseSchema(wp, fase) {
   return { start, eind, beschikbaar, benodigd, items, overschrijding: benodigd > beschikbaar, eindeBerekend: cursor };
 }
 
-// Eerstvolgende mijlpaal (fase-overgang) op of na de peildatum.
 function volgendeMijlpaal(wp) {
   let best = null;
   MIJLPALEN.forEach((m) => {
@@ -169,42 +181,31 @@ function volgendeMijlpaal(wp) {
   return best;
 }
 
-// Signalen / risico's per werkpakket.
 function signalen(wp) {
   const sig = [];
   const v = State.voortgang[wp.id] || {};
   const hf = huidigeFase(wp);
-
-  // geblokkeerde activiteiten
   const geblok = Object.entries(v).filter(([, o]) => o.status === 'geblokkeerd').map(([c]) => c);
   if (geblok.length) sig.push({ type: 'geblokkeerd', ernst: 3, tekst: `${geblok.length} geblokkeerde activiteit(en)`, codes: geblok });
-
-  // fasen die volgens planning al voorbij zijn maar niet 100% gereed
   FASES.forEach((f) => {
     const eind = parseDatum(wp.mijlpalen[f.eindMijlpaal]);
     if (!eind) return;
     const fv = faseVoortgang(wp, f);
     if (eind < VANDAAG && fv.totaal && fv.pct < 100) {
-      const dagen = Math.round((VANDAAG - eind) / 864e5);
+      const dagen = dagenVerschil(eind, VANDAAG);
       sig.push({ type: 'achterstand', ernst: 3, tekst: `${f.naam} ${dagen}d over einddatum, ${fv.pct}% gereed` });
     }
   });
-
-  // huidige fase met deadline binnen 21 dagen en < 80% gereed
   if (hf.fase && hf.status === 'lopend') {
     const eind = parseDatum(wp.mijlpalen[hf.fase.eindMijlpaal]);
     const fv = faseVoortgang(wp, hf.fase);
     if (eind) {
-      const dagen = Math.round((eind - VANDAAG) / 864e5);
+      const dagen = dagenVerschil(VANDAAG, eind);
       if (dagen >= 0 && dagen <= 21 && fv.pct < 80)
         sig.push({ type: 'deadline', ernst: 2, tekst: `${hf.fase.naam} deadline over ${dagen}d, ${fv.pct}% gereed` });
-    }
-    // activiteiten waarvan de doorlooptijd niet meer past tot de fase-einddatum
-    if (eind) {
       const rem = werkdagenTussen(VANDAAG, eind);
-      const v2 = State.voortgang[wp.id] || {};
       const nietHaalbaar = hf.fase.activiteiten.filter((a) => {
-        const st = (v2[a.code] && v2[a.code].status) || 'open';
+        const st = (v[a.code] && v[a.code].status) || 'open';
         return st !== 'gereed' && st !== 'nvt' && State.getDt(a.code) > rem;
       });
       if (nietHaalbaar.length)
@@ -213,20 +214,19 @@ function signalen(wp) {
   }
   return sig;
 }
-
 function maxErnst(sigs) { return sigs.reduce((m, s) => Math.max(m, s.ernst), 0); }
 
-/* ---------------------------- Projectniveau ------------------------------ */
-function projectStats(project) {
-  const wps = State.werkpakketten.filter((w) => w.project === project);
+/* ----------------------- Aggregatie over WP-sets ------------------------- */
+function statsVoor(wps) {
   const meters = wps.reduce((s, w) => s + (+w.lengteNieuw || 0), 0);
-  let pctSom = 0, kritiek = 0;
-  const faseTeller = {};
-  let volgende = null;
+  let pctSom = 0, kritiek = 0, gevaar = 0, geblok = 0, opKoers = 0;
+  const faseTeller = {}; let volgende = null;
   wps.forEach((w) => {
-    pctSom += activiteitVoortgang(w).pct;
-    const sigs = signalen(w);
-    if (maxErnst(sigs) >= 2) kritiek++;
+    const av = activiteitVoortgang(w);
+    pctSom += av.pct;
+    if (av.geblokkeerd) geblok++;
+    const e = maxErnst(signalen(w));
+    if (e >= 3) kritiek++; else if (e >= 2) gevaar++; else opKoers++;
     const hf = huidigeFase(w);
     const key = hf.status === 'afgerond' ? 'Afgerond' : (hf.fase ? hf.fase.naam : 'Onbekend');
     faseTeller[key] = (faseTeller[key] || 0) + 1;
@@ -234,29 +234,112 @@ function projectStats(project) {
     if (vm && (!volgende || vm.datum < volgende.datum)) volgende = vm;
   });
   return {
-    project, wps, aantal: wps.length, meters,
+    wps, aantal: wps.length, meters,
     pct: wps.length ? Math.round(pctSom / wps.length) : 0,
-    kritiek, faseTeller, volgende,
+    kritiek, gevaar, geblok, opKoers, faseTeller, volgende,
     engineers: [...new Set(wps.map((w) => w.engineer).filter(Boolean))],
+    apds: [...new Set(wps.map(apdVan))],
   };
 }
+function projectStats(project) { return Object.assign({ project }, statsVoor(State.werkpakketten.filter((w) => w.project === project))); }
 
+/* -------------------------- Filters / selectie --------------------------- */
 function gefilterdeWerkpakketten() {
   const f = State.filters;
   const zoek = f.zoek.toLowerCase();
   return State.werkpakketten.filter((wp) => {
     if (f.project && wp.project !== f.project) return false;
+    if (f.apd && apdVan(wp) !== f.apd) return false;
     if (f.engineer && wp.engineer !== f.engineer) return false;
-    if (f.fase) {
-      const hf = huidigeFase(wp).fase;
-      if (!hf || hf.id !== f.fase) return false;
-    }
+    if (f.fase) { const hf = huidigeFase(wp).fase; if (!hf || hf.id !== f.fase) return false; }
     if (zoek) {
-      const blob = `${wp.project} ${wp.wp} ${wp.engineer} ${wp.tracStart} ${wp.tracEind} ${wp.apd} ${wp.tracdeel}`.toLowerCase();
+      const blob = `${wp.project} ${wp.apd} ${wp.wp} ${wp.engineer} ${wp.tracStart} ${wp.tracEind} ${wp.tracdeel}`.toLowerCase();
       if (!blob.includes(zoek)) return false;
     }
     return true;
   });
+}
+
+/* ----------------------------- Takenplanning ----------------------------- */
+function horizonRange() {
+  const h = HORIZONS.find((x) => x.id === State.horizon) || HORIZONS[1];
+  const van = new Date(VANDAAG);
+  let tot, label;
+  if (h.dagen) { tot = new Date(VANDAAG); tot.setDate(tot.getDate() + h.dagen); label = `komende ${h.label}`; }
+  else if (h.id === 'maand') { tot = new Date(VANDAAG.getFullYear(), VANDAAG.getMonth() + 1, 0); label = 'rest van deze maand'; }
+  else { const q = Math.floor(VANDAAG.getMonth() / 3); tot = new Date(VANDAAG.getFullYear(), q * 3 + 3, 0); label = 'rest van dit kwartaal'; }
+  return { van, tot, label };
+}
+
+function komendeTaken(wps, tot) {
+  const taken = [];
+  wps.forEach((w) => {
+    const hf = huidigeFase(w);
+    const v = State.voortgang[w.id] || {};
+    FASES.forEach((f) => {
+      const sch = faseSchema(w, f);
+      if (!sch) return;
+      const faseEind = sch.eind, faseStart = sch.start;
+      const overtijdFase = faseEind < VANDAAG;
+      if (faseStart > tot) return;            // fase begint na de horizon
+      sch.items.forEach((it) => {
+        const a = it.activiteit;
+        const st = (v[a.code] && v[a.code].status) || 'open';
+        if (st === 'gereed' || st === 'nvt') return;
+        if (it.start > tot && !overtijdFase) return;   // valt buiten de horizon
+        const dt = it.dt;
+        const restTotEind = werkdagenTussen(VANDAAG, faseEind);
+        const latestStart = minWerkdagen(faseEind, dt);
+        const speling = restTotEind - dt;
+        let ernst = 1; const flags = [];
+        if (st === 'geblokkeerd') { ernst = 3; flags.push('geblokkeerd'); }
+        if (overtijdFase) { ernst = 3; if (!flags.includes('kritiek')) flags.push('kritiek'); }
+        else if (dt > restTotEind) { ernst = Math.max(ernst, 3); if (!flags.includes('kritiek')) flags.push('kritiek'); }
+        else if (VANDAAG > latestStart) { ernst = Math.max(ernst, 2); flags.push('gevaar'); }
+        else if (speling <= Math.max(2, Math.ceil(dt * 0.3))) { ernst = Math.max(ernst, 2); flags.push('gevaar'); }
+        const isLaatste = f.activiteiten[f.activiteiten.length - 1].code === a.code;
+        if (isLaatste && faseEind >= VANDAAG && faseEind <= tot) flags.push('mijlpaal');
+        taken.push({
+          wp: w, fase: f, activiteit: a, status: st, dt,
+          plannedStart: it.start, plannedEind: it.eind, faseEind, latestStart,
+          speling, restTotEind, overtijd: overtijdFase, ernst, flags,
+          huidig: !!(hf.fase && hf.fase.id === f.id),
+        });
+      });
+    });
+  });
+  taken.sort((a, b) => b.ernst - a.ernst || a.faseEind - b.faseEind || a.plannedStart - b.plannedStart);
+  return taken;
+}
+
+/* ----------------------------- Snapshots --------------------------------- */
+function legSnapshot() {
+  let gereed = 0, totaal = 0;
+  const perProject = {};
+  State.werkpakketten.forEach((w) => {
+    const av = activiteitVoortgang(w);
+    gereed += av.klaar; totaal += av.totaal;
+    if (!perProject[w.project]) perProject[w.project] = { pctSom: 0, n: 0 };
+    perProject[w.project].pctSom += av.pct; perProject[w.project].n++;
+  });
+  const pp = {};
+  Object.entries(perProject).forEach(([p, o]) => { pp[p] = Math.round(o.pctSom / o.n); });
+  const snap = {
+    datum: isoDatum(VANDAAG),
+    gemaakt: new Date().toISOString(),
+    gereed, totaal,
+    pct: totaal ? Math.round((gereed / totaal) * 100) : 0,
+    perProject: pp,
+  };
+  State.snapshots = State.snapshots.filter((s) => s.datum !== snap.datum);
+  State.snapshots.push(snap);
+  State.snapshots.sort((a, b) => a.datum.localeCompare(b.datum));
+  State.bewaar();
+}
+function snapshotVoor(datum) {
+  let best = null;
+  State.snapshots.forEach((s) => { if (s.datum <= datum && (!best || s.datum > best.datum)) best = s; });
+  return best;
 }
 
 /* ------------------------------- Helpers --------------------------------- */
@@ -265,107 +348,197 @@ const els = (sel) => Array.from(document.querySelectorAll(sel));
 function htmlEsc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+function toast(msg, type = '') {
+  const t = el('#toast');
+  t.className = 'toast toon ' + type;
+  t.textContent = msg;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.className = 'toast ' + type; }, 2800);
+}
 
 /* -------------------------------- Render --------------------------------- */
 function render() {
   vulFilters();
-  renderProjecten();
   renderOverzicht();
   renderPlanning();
-  renderRapportage();
+  renderTaken();
+  renderDashboard();
+  renderRapportenControls();
   renderActiviteiten();
   renderDoorlooptijden();
+  renderInstellingen();
   if (State.actiefWp) renderDetail(State.actiefWp);
 }
 
 function vulFilters() {
   const projecten = [...new Set(State.werkpakketten.map((w) => w.project))].sort();
   const engineers = [...new Set(State.werkpakketten.map((w) => w.engineer).filter(Boolean))].sort();
+  const apds = [...new Set(State.werkpakketten
+    .filter((w) => !State.filters.project || w.project === State.filters.project)
+    .map(apdVan))].sort();
   const setOpts = (sel, items, huidig, leeg) => {
-    const node = el(sel);
-    node.innerHTML = `<option value="">${leeg}</option>` +
+    el(sel).innerHTML = `<option value="">${leeg}</option>` +
       items.map((i) => `<option value="${htmlEsc(i)}"${i === huidig ? ' selected' : ''}>${htmlEsc(i)}</option>`).join('');
   };
   setOpts('#filterProject', projecten, State.filters.project, 'Alle projecten');
+  setOpts('#filterApd', apds, State.filters.apd, 'Alle APD’s');
   setOpts('#filterEngineer', engineers, State.filters.engineer, 'Alle engineers');
-  setOpts('#filterFase', FASES.map((f) => f.id), State.filters.fase, 'Alle fasen');
-  // labels voor fase-opties
   el('#filterFase').innerHTML = `<option value="">Alle fasen</option>` +
     FASES.map((f) => `<option value="${f.id}"${f.id === State.filters.fase ? ' selected' : ''}>${htmlEsc(f.naam)}</option>`).join('');
 }
 
+/* ----------------------- Overzicht (hiërarchie) -------------------------- */
 function renderOverzicht() {
   const wps = gefilterdeWerkpakketten();
+  const niveau = !State.filters.project ? 'projecten' : (!State.filters.apd ? 'apds' : 'wps');
 
-  // KPI's
-  const totMeters = wps.reduce((s, w) => s + (+w.lengteNieuw || 0), 0);
-  const faseTeller = {};
-  let gemPct = 0;
-  wps.forEach((w) => {
-    const hf = huidigeFase(w);
-    const key = hf.status === 'afgerond' ? 'Afgerond' : (hf.fase ? hf.fase.naam : 'Onbekend');
-    faseTeller[key] = (faseTeller[key] || 0) + 1;
-    gemPct += activiteitVoortgang(w).pct;
-  });
-  gemPct = wps.length ? Math.round(gemPct / wps.length) : 0;
+  const kruimels = ['<button data-niveau="root">Projecten</button>'];
+  if (State.filters.project) {
+    kruimels.push('<span class="scheiding">▸</span>');
+    if (niveau === 'apds') kruimels.push(`<span class="huidig">${htmlEsc(State.filters.project)}</span>`);
+    else kruimels.push(`<button data-niveau="project">${htmlEsc(State.filters.project)}</button>`);
+  }
+  if (State.filters.apd) {
+    kruimels.push('<span class="scheiding">▸</span>');
+    kruimels.push(`<span class="huidig">APD ${htmlEsc(State.filters.apd)}</span>`);
+  }
+  el('#kruimels').innerHTML = kruimels.join(' ');
+  els('#kruimels [data-niveau]').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.niveau === 'root') { State.filters.project = ''; State.filters.apd = ''; }
+    if (b.dataset.niveau === 'project') { State.filters.apd = ''; }
+    el('#filterZoek').value = ''; State.filters.zoek = ''; render();
+  }));
 
+  const s = statsVoor(wps);
   el('#kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-val">${wps.length}</div><div class="kpi-label">Werkpakketten</div></div>
-    <div class="kpi"><div class="kpi-val">${[...new Set(wps.map(w=>w.project))].length}</div><div class="kpi-label">Projecten</div></div>
-    <div class="kpi"><div class="kpi-val">${(totMeters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}</div><div class="kpi-label">km nieuw tracé</div></div>
-    <div class="kpi"><div class="kpi-val">${gemPct}%</div><div class="kpi-label">Gem. activiteit-voortgang</div></div>
-  `;
+    <div class="kpi"><div class="kpi-val">${s.aantal}</div><div class="kpi-label">Werkpakketten</div></div>
+    <div class="kpi kpi-paars"><div class="kpi-val">${niveau === 'projecten' ? [...new Set(wps.map(w=>w.project))].length : s.apds.length}</div><div class="kpi-label">${niveau === 'projecten' ? 'Projecten' : 'APD’s'}</div></div>
+    <div class="kpi kpi-groen"><div class="kpi-val">${(s.meters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}<small> km</small></div><div class="kpi-label">Nieuw tracé</div></div>
+    <div class="kpi"><div class="kpi-val">${s.pct}<small>%</small></div><div class="kpi-label">Gem. voortgang</div></div>
+    <div class="kpi kpi-rood"><div class="kpi-val">${s.kritiek}</div><div class="kpi-label">Kritieke WP’s</div></div>
+    <div class="kpi kpi-amber"><div class="kpi-val">${s.gevaar}</div><div class="kpi-label">WP’s met risico</div></div>`;
 
-  // Fase-verdeling balk
   const totaal = wps.length || 1;
-  const faseChips = [...FASES.map((f) => f.naam), 'Afgerond', 'Onbekend']
-    .filter((n) => faseTeller[n])
+  el('#faseTitel').textContent = 'Faseverdeling';
+  el('#faseBalk').innerHTML = [...FASES.map((f) => f.naam), 'Afgerond', 'Onbekend']
+    .filter((n) => s.faseTeller[n])
     .map((n) => {
       const fase = FASES.find((f) => f.naam === n);
       const kleur = fase ? fase.kleur : (n === 'Afgerond' ? '#475569' : '#cbd5e1');
-      const pct = Math.round((faseTeller[n] / totaal) * 100);
-      return `<div class="seg" style="width:${pct}%;background:${kleur}" title="${htmlEsc(n)}: ${faseTeller[n]}"></div>`;
+      const pct = (s.faseTeller[n] / totaal) * 100;
+      return `<div class="seg" style="width:${pct}%;background:${kleur}" title="${htmlEsc(n)}: ${s.faseTeller[n]}"></div>`;
     }).join('');
-  el('#faseBalk').innerHTML = faseChips;
   el('#faseLegenda').innerHTML = [...FASES, { naam: 'Afgerond', kleur: '#475569' }]
-    .filter((f) => faseTeller[f.naam])
-    .map((f) => `<span class="leg"><i style="background:${f.kleur}"></i>${htmlEsc(f.naam)} (${faseTeller[f.naam]})</span>`).join('');
+    .filter((f) => s.faseTeller[f.naam])
+    .map((f) => `<span class="leg"><i style="background:${f.kleur}"></i>${htmlEsc(f.naam)} (${s.faseTeller[f.naam]})</span>`).join('');
 
-  // Tabel
+  if (niveau === 'projecten') renderProjectenGrid();
+  else if (niveau === 'apds') renderApdGrid(State.filters.project);
+  else renderWpTabel(wps);
+}
+
+function renderProjectenGrid() {
+  const projecten = [...new Set(State.werkpakketten.map((w) => w.project))].sort();
+  const html = projecten.map((p) => {
+    const s = projectStats(p);
+    const totaal = s.aantal || 1;
+    const segs = [...FASES, { naam: 'Afgerond', kleur: '#475569' }, { naam: 'Onbekend', kleur: '#cbd5e1' }]
+      .filter((f) => s.faseTeller[f.naam])
+      .map((f) => `<div class="seg" style="width:${(s.faseTeller[f.naam] / totaal) * 100}%;background:${f.kleur}"></div>`).join('');
+    const chip = s.kritiek ? `<span class="chip rood">${s.kritiek} kritiek</span>`
+      : s.gevaar ? `<span class="chip amber">${s.gevaar} risico</span>`
+      : `<span class="chip groen">op koers</span>`;
+    return `<div class="pcard" data-project="${htmlEsc(p)}">
+      <div class="pcard-kop"><h3>${htmlEsc(p)}</h3>${chip}</div>
+      <div class="pcard-stats">
+        <div><strong>${s.apds.length}</strong><span>APD’s</span></div>
+        <div><strong>${s.aantal}</strong><span>werkpakketten</span></div>
+        <div><strong>${(s.meters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}</strong><span>km tracé</span></div>
+        <div><strong>${s.pct}%</strong><span>voortgang</span></div>
+      </div>
+      <div class="fasebalk mini">${segs}</div>
+      <div class="pcard-foot">
+        <span>${s.engineers.length ? htmlEsc(s.engineers.join(', ')) : '—'}</span>
+        <span>${s.volgende ? `eerstvolgend: ${htmlEsc(s.volgende.mijlpaal.label)} · ${fmtDatum(s.volgende.datum)}` : ''}</span>
+      </div>
+      <button class="pcard-open">Open APD’s →</button>
+    </div>`;
+  }).join('') || '<div class="leeg">Nog geen projecten. Importeer een planning of laad voorbeelddata.</div>';
+  el('#hierInhoud').innerHTML = `<div class="niveau-balk">Niveau 1 · Projecten</div><div class="projecten-grid">${html}</div>`;
+  els('#hierInhoud .pcard').forEach((c) => c.addEventListener('click', () => {
+    State.filters.project = c.dataset.project; State.filters.apd = '';
+    el('#filterZoek').value = ''; State.filters.zoek = ''; render();
+  }));
+}
+
+function renderApdGrid(project) {
+  const wps = State.werkpakketten.filter((w) => w.project === project);
+  const apds = [...new Set(wps.map(apdVan))].sort();
+  const html = apds.map((apd) => {
+    const sub = wps.filter((w) => apdVan(w) === apd);
+    const s = statsVoor(sub);
+    const totaal = s.aantal || 1;
+    const segs = [...FASES, { naam: 'Afgerond', kleur: '#475569' }, { naam: 'Onbekend', kleur: '#cbd5e1' }]
+      .filter((f) => s.faseTeller[f.naam])
+      .map((f) => `<div class="seg" style="width:${(s.faseTeller[f.naam] / totaal) * 100}%;background:${f.kleur}"></div>`).join('');
+    const chip = s.kritiek ? `<span class="chip rood">${s.kritiek} kritiek</span>`
+      : s.gevaar ? `<span class="chip amber">${s.gevaar} risico</span>`
+      : `<span class="chip groen">op koers</span>`;
+    return `<div class="apdcard" data-apd="${htmlEsc(apd)}">
+      <div class="apdcard-kop"><div><span class="pad">APD</span><h4>${htmlEsc(apd)}</h4></div>${chip}</div>
+      <div class="apdcard-stats">
+        <div><strong>${s.aantal}</strong><span>werkpakketten</span></div>
+        <div><strong>${(s.meters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}</strong><span>km tracé</span></div>
+        <div><strong>${s.pct}%</strong><span>voortgang</span></div>
+      </div>
+      <div class="fasebalk mini">${segs}</div>
+      <button class="apdcard-open">Open werkpakketten →</button>
+    </div>`;
+  }).join('');
+  el('#hierInhoud').innerHTML = `<div class="niveau-balk">Niveau 2 · APD’s binnen ${htmlEsc(project)}</div><div class="apd-grid">${html}</div>`;
+  els('#hierInhoud .apdcard').forEach((c) => c.addEventListener('click', () => {
+    State.filters.apd = c.dataset.apd; render();
+  }));
+}
+
+function renderWpTabel(wps) {
   const rows = wps.map((w) => {
     const hf = huidigeFase(w);
     const av = activiteitVoortgang(w);
     const faseNaam = hf.status === 'afgerond' ? 'Afgerond' : (hf.fase ? hf.fase.naam : '—');
     const kleur = hf.fase ? hf.fase.kleur : '#94a3b8';
-    const statusBadge = hf.status === 'afgerond'
-      ? '<span class="badge done">Afgerond</span>'
-      : hf.status === 'gepland'
-        ? '<span class="badge plan">Gepland</span>'
-        : '<span class="badge live">Lopend</span>';
+    const statusBadge = hf.status === 'afgerond' ? '<span class="badge done">Afgerond</span>'
+      : hf.status === 'gepland' ? '<span class="badge plan">Gepland</span>'
+      : '<span class="badge live">Lopend</span>';
+    const ernst = maxErnst(signalen(w));
+    const risico = ernst >= 3 ? '<span class="tflag kritiek">kritiek</span>' : ernst >= 2 ? '<span class="tflag gevaar">risico</span>' : '';
     return `<tr data-wp="${htmlEsc(w.id)}" class="rij">
-      <td><strong>${htmlEsc(w.project)}</strong><div class="sub">${htmlEsc(w.apd||'')}${w.tracdeel?' · '+htmlEsc(w.tracdeel):''}</div></td>
-      <td>${htmlEsc(w.wp)}<div class="sub">${htmlEsc(w.tracStart)} → ${htmlEsc(w.tracEind)}</div></td>
+      <td><strong>${htmlEsc(w.wp)}</strong><div class="sub">${htmlEsc(w.tracStart)} → ${htmlEsc(w.tracEind)}</div></td>
       <td>${htmlEsc(w.engineer||'—')}</td>
       <td class="num">${(+w.lengteNieuw||0).toLocaleString('nl-NL')}</td>
       <td><span class="fase-pill" style="--c:${kleur}">${htmlEsc(faseNaam)}</span> ${statusBadge}</td>
       <td>${fmtDatum(w.mijlpalen.doNaarUO)}</td>
-      <td>
-        <div class="bar"><span style="width:${av.pct}%"></span></div>
-        <div class="sub">${av.klaar}/${av.totaal} · ${av.pct}%${av.geblokkeerd?` · <span style="color:#ef4444">${av.geblokkeerd} geblok.</span>`:''}</div>
-      </td>
+      <td><div class="bar"><span style="width:${av.pct}%"></span></div>
+        <div class="sub">${av.klaar}/${av.totaal} · ${av.pct}%${av.geblokkeerd?` · <span style="color:#ef4444">${av.geblokkeerd} geblok.</span>`:''}</div></td>
+      <td>${risico}</td>
     </tr>`;
   }).join('');
-  el('#tabelBody').innerHTML = rows || `<tr><td colspan="7" class="leeg">Geen werkpakketten gevonden.</td></tr>`;
-  els('#tabelBody .rij').forEach((tr) => tr.addEventListener('click', () => openDetail(tr.dataset.wp)));
+  el('#hierInhoud').innerHTML = `
+    <div class="card">
+      <div class="card-kop"><h2>Werkpakketten<span class="tel">${wps.length}</span></h2><span class="hint">Klik op een rij voor de activiteiten-checklist</span></div>
+      <div class="tabel-wrap"><table class="tabel">
+        <thead><tr><th>Werkpakket</th><th>Engineer</th><th class="num">Meters</th><th>Huidige fase</th><th>DO → UO</th><th>Voortgang</th><th>Risico</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="leeg">Geen werkpakketten gevonden.</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+  els('#hierInhoud .rij').forEach((tr) => tr.addEventListener('click', () => openDetail(tr.dataset.wp)));
 }
 
 /* ------------------------------- Planning -------------------------------- */
 function renderPlanning() {
   const wps = gefilterdeWerkpakketten();
   const container = el('#ganttBody');
-  if (!wps.length) { container.innerHTML = '<div class="leeg">Geen werkpakketten.</div>'; el('#ganttAs').innerHTML=''; return; }
-
-  // bepaal globale datumgrenzen
+  if (!wps.length) { container.innerHTML = '<div class="leeg">Geen werkpakketten.</div>'; el('#ganttAs').innerHTML = ''; return; }
   let min = null, max = null;
   wps.forEach((w) => MIJLPALEN.forEach((m) => {
     const d = parseDatum(w.mijlpalen[m.key]);
@@ -374,8 +547,6 @@ function renderPlanning() {
   if (!min || !max) { container.innerHTML = '<div class="leeg">Geen plandata.</div>'; return; }
   const span = (max - min) || 1;
   const pos = (d) => ((parseDatum(d) - min) / span) * 100;
-
-  // tijd-as (maanden)
   const asTicks = [];
   let cur = new Date(min.getFullYear(), min.getMonth(), 1);
   while (cur <= max) {
@@ -385,25 +556,90 @@ function renderPlanning() {
   const vandaagLeft = (VANDAAG >= min && VANDAAG <= max) ? ((VANDAAG - min) / span) * 100 : null;
   el('#ganttAs').innerHTML = asTicks.map((t) => `<span class="tick" style="left:${t.left}%">${t.label}</span>`).join('') +
     (vandaagLeft != null ? `<span class="vandaag-as" style="left:${vandaagLeft}%">vandaag</span>` : '');
-
   container.innerHTML = wps.map((w) => {
     const segs = FASES.map((f) => {
-      const s = w.mijlpalen[f.startMijlpaal], e = w.mijlpalen[f.eindMijlpaal];
-      if (!parseDatum(s) || !parseDatum(e)) return '';
-      const left = pos(s), width = Math.max(pos(e) - pos(s), 0.4);
-      return `<div class="gseg" style="left:${left}%;width:${width}%;background:${f.kleur}"
-                title="${htmlEsc(w.project)} ${htmlEsc(w.wp)} — ${htmlEsc(f.naam)}: ${fmtDatum(s)} → ${fmtDatum(e)}"></div>`;
+      const ss = w.mijlpalen[f.startMijlpaal], e = w.mijlpalen[f.eindMijlpaal];
+      if (!parseDatum(ss) || !parseDatum(e)) return '';
+      const left = pos(ss), width = Math.max(pos(e) - pos(ss), 0.4);
+      return `<div class="gseg" style="left:${left}%;width:${width}%;background:${f.kleur}" title="${htmlEsc(w.project)} ${htmlEsc(apdVan(w))} ${htmlEsc(w.wp)} — ${htmlEsc(f.naam)}: ${fmtDatum(ss)} → ${fmtDatum(e)}"></div>`;
     }).join('');
     return `<div class="grow" data-wp="${htmlEsc(w.id)}">
-      <div class="glabel" title="${htmlEsc(w.project)} ${htmlEsc(w.wp)}">${htmlEsc(w.project)} · ${htmlEsc(w.wp)}</div>
+      <div class="glabel" title="${htmlEsc(w.project)} · ${htmlEsc(apdVan(w))} · ${htmlEsc(w.wp)}">${htmlEsc(w.project)} · ${htmlEsc(w.wp)}</div>
       <div class="gtrack">${segs}${vandaagLeft != null ? `<div class="vandaag-lijn" style="left:${vandaagLeft}%"></div>` : ''}</div>
     </div>`;
   }).join('');
   els('#ganttBody .grow').forEach((r) => r.addEventListener('click', () => openDetail(r.dataset.wp)));
+  el('#ganttLegenda').innerHTML = FASES.map((f) => `<span class="leg"><i style="background:${f.kleur}"></i>${htmlEsc(f.naam)}</span>`).join('');
+}
 
-  // legenda
-  el('#ganttLegenda').innerHTML = FASES.map((f) =>
-    `<span class="leg"><i style="background:${f.kleur}"></i>${htmlEsc(f.naam)}</span>`).join('');
+/* -------------------------------- Taken ---------------------------------- */
+function renderTaken() {
+  el('#horizonKiezer').innerHTML = HORIZONS.map((h) =>
+    `<button data-h="${h.id}"${h.id === State.horizon ? ' class="actief"' : ''}>${htmlEsc(h.label)}</button>`).join('');
+  els('#horizonKiezer button').forEach((b) => b.addEventListener('click', () => { State.horizon = b.dataset.h; renderTaken(); }));
+
+  const { van, tot, label } = horizonRange();
+  const wps = gefilterdeWerkpakketten();
+  const taken = komendeTaken(wps, tot);
+  const kritiek = taken.filter((t) => t.ernst >= 3);
+  const gevaar = taken.filter((t) => t.ernst === 2);
+  const gepland = taken.filter((t) => t.ernst === 1);
+  const geblok = taken.filter((t) => t.status === 'geblokkeerd');
+  let mp = 0;
+  wps.forEach((w) => MIJLPALEN.forEach((m) => { const d = parseDatum(w.mijlpalen[m.key]); if (d && d >= van && d <= tot) mp++; }));
+
+  el('#takenPeriode').innerHTML = `Periode: <span style="color:var(--accent)">${fmtDatum(van)} → ${fmtDatum(tot)}</span> <span class="hint">(${label})</span>`;
+  el('#takenStats').innerHTML = `
+    <div class="tstat blauw"><b>${taken.length}</b><span>taken in beeld</span></div>
+    <div class="tstat rood"><b>${kritiek.length}</b><span>kritiek</span></div>
+    <div class="tstat amber"><b>${gevaar.length}</b><span>lopen gevaar</span></div>
+    <div class="tstat"><b>${geblok.length}</b><span>geblokkeerd</span></div>
+    <div class="tstat groen"><b>${mp}</b><span>mijlpalen in periode</span></div>`;
+
+  const groep = (titel, lijst, vlagKleur, maxItems) => {
+    if (!lijst.length) return '';
+    const begrensd = maxItems && lijst.length > maxItems;
+    const items = (begrensd ? lijst.slice(0, maxItems) : lijst).map(taakKaart).join('');
+    const rest = begrensd ? `<div class="hint" style="padding:8px 4px">… en nog ${lijst.length - maxItems} geplande taken (verfijn met de filters of kies een kortere horizon).</div>` : '';
+    return `<div class="taakgroep">
+      <div class="taakgroep-kop"><span class="vlag" style="background:${vlagKleur}"></span>${titel}<span class="telp">${lijst.length}</span></div>
+      ${items}${rest}</div>`;
+  };
+
+  el('#takenLijst').innerHTML =
+    (groep('Kritieke taken', kritiek, '#ef4444') +
+     groep('Taken die gevaar lopen', gevaar, '#f59e0b') +
+     groep('Overige geplande taken', gepland, '#3b82f6', 40))
+    || '<div class="card"><div class="leeg">Geen taken in deze periode. 👍</div></div>';
+
+  els('#takenLijst .taak').forEach((t) => t.addEventListener('click', () => openDetail(t.dataset.wp)));
+}
+
+function taakKaart(t) {
+  const w = t.wp;
+  const dagen = dagenVerschil(VANDAAG, t.faseEind);
+  const deadlineTxt = t.overtijd
+    ? `<span style="color:var(--rood)">${Math.abs(dagen)}d over deadline</span>`
+    : `nog <b>${dagen}d</b> tot fase-eind`;
+  const vlaggen = t.flags.map((f) => `<span class="tflag ${f}">${f}</span>`).join('');
+  const stKleur = STATUSSEN[t.status].kleur;
+  return `<div class="taak ernst-${t.ernst}" data-wp="${htmlEsc(w.id)}">
+    <div class="taak-hoofd">
+      <div class="taak-titel"><span class="tcode">${htmlEsc(t.activiteit.code)}</span>${htmlEsc(t.activiteit.naam)}</div>
+      <div class="taak-meta">
+        <span>${htmlEsc(w.project)} · ${htmlEsc(apdVan(w))} · <b>${htmlEsc(w.wp)}</b></span>
+        <span>${htmlEsc(w.engineer || '—')}</span>
+        <span>fase: <b>${htmlEsc(t.fase.naam)}</b></span>
+        <span>doorlooptijd: <b>${t.dt} wd</b></span>
+        <span>speling: <b style="color:${t.speling < 0 ? 'var(--rood)' : t.speling < 3 ? 'var(--amber)' : 'inherit'}">${t.speling} wd</b></span>
+      </div>
+    </div>
+    <div class="taak-rechts">
+      <div class="taak-vlaggen">${vlaggen}<span class="statuschip" style="background:${stKleur}">${STATUSSEN[t.status].label}</span></div>
+      <div class="taak-deadline">${deadlineTxt} <em>(${fmtDatum(t.faseEind)})</em></div>
+      <div class="hint">uiterlijk starten: ${fmtDatum(t.latestStart)}</div>
+    </div>
+  </div>`;
 }
 
 /* ------------------------------- Detail ---------------------------------- */
@@ -424,67 +660,43 @@ function renderDetail(wpId) {
   const v = State.wpVoortgang(w.id);
   const hf = huidigeFase(w);
   const av = activiteitVoortgang(w);
-
   el('#detailTitel').textContent = `${w.project} · ${w.wp}`;
-  el('#detailSub').innerHTML = `${htmlEsc(w.engineer || '—')} · ${htmlEsc(w.tracStart)} → ${htmlEsc(w.tracEind)} · ${(+w.lengteNieuw||0).toLocaleString('nl-NL')} m`;
-
-  // mijlpaal-tijdlijn
+  el('#detailSub').innerHTML = `APD ${htmlEsc(apdVan(w))} · ${htmlEsc(w.engineer || '—')} · ${htmlEsc(w.tracStart)} → ${htmlEsc(w.tracEind)} · ${(+w.lengteNieuw||0).toLocaleString('nl-NL')} m`;
+  const volgende = volgendeMijlpaal(w);
   const mij = MIJLPALEN.filter((m) => parseDatum(w.mijlpalen[m.key])).map((m) => {
     const d = parseDatum(w.mijlpalen[m.key]);
     const verleden = d <= VANDAAG;
-    return `<li class="${verleden ? 'past' : ''}"><span class="dot"></span><span class="ml">${htmlEsc(m.label)}</span><span class="md">${fmtDatum(d)}</span></li>`;
+    const isNext = volgende && volgende.mijlpaal.key === m.key;
+    return `<li class="${verleden ? 'past' : ''}${isNext ? ' next' : ''}"><span class="dot"></span><span class="ml">${htmlEsc(m.label)}</span><span class="md">${fmtDatum(d)}</span></li>`;
   }).join('');
   el('#detailMijlpalen').innerHTML = mij || '<li class="leeg">Geen mijlpaaldata.</li>';
-
   el('#detailFaseInfo').innerHTML = hf.fase
     ? `Huidige fase volgens planning: <strong style="color:${hf.fase.kleur}">${htmlEsc(hf.fase.naam)}</strong> <span class="badge ${hf.status==='afgerond'?'done':hf.status==='gepland'?'plan':'live'}">${hf.status}</span> · activiteit-voortgang ${av.klaar}/${av.totaal} (${av.pct}%)`
     : 'Geen fase-informatie beschikbaar.';
-
-  // activiteiten-checklist per fase
   el('#detailFasen').innerHTML = FASES.map((f) => {
     const fv = faseVoortgang(w, f);
     const open = (hf.fase && hf.fase.id === f.id) ? ' open' : '';
     const items = f.activiteiten.map((a) => {
       const cur = (v[a.code] && v[a.code].status) || 'open';
       const notitie = (v[a.code] && v[a.code].notitie) || '';
-      const opts = Object.entries(STATUSSEN).map(([k, o]) =>
-        `<option value="${k}"${k === cur ? ' selected' : ''}>${o.label}</option>`).join('');
+      const opts = Object.entries(STATUSSEN).map(([k, o]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${o.label}</option>`).join('');
       return `<div class="act ${cur}">
-        <div class="act-top">
-          <span class="act-code">${htmlEsc(a.code)}</span>
-          <span class="act-naam">${htmlEsc(a.naam)}</span>
-          <select class="act-status" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" style="--c:${STATUSSEN[cur].kleur}">${opts}</select>
-        </div>
+        <div class="act-top"><span class="act-code">${htmlEsc(a.code)}</span><span class="act-naam">${htmlEsc(a.naam)}</span>
+        <select class="act-status" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" style="--c:${STATUSSEN[cur].kleur}">${opts}</select></div>
         <div class="act-omschr">${htmlEsc(a.omschrijving)}</div>
-        <input class="act-notitie" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" placeholder="Notitie / actie…" value="${htmlEsc(notitie)}">
-      </div>`;
+        <input class="act-notitie" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" placeholder="Notitie / actie…" value="${htmlEsc(notitie)}"></div>`;
     }).join('');
     const sch = faseSchema(w, f);
-    const budget = sch
-      ? `<div class="fbudget ${sch.overschrijding ? 'krap' : ''}">
-           Venster ${fmtDatum(sch.start)} → ${fmtDatum(sch.eind)} ·
-           <strong>${sch.beschikbaar}</strong> werkdagen beschikbaar ·
-           som doorlooptijden <strong>${sch.benodigd}</strong> wd
-           ${sch.overschrijding ? '<span class="waarsch">parallel werk nodig</span>' : '<span class="ok">ruim</span>'}
-         </div>`
-      : '';
+    const budget = sch ? `<div class="fbudget ${sch.overschrijding ? 'krap' : ''}">Venster ${fmtDatum(sch.start)} → ${fmtDatum(sch.eind)} · <strong>${sch.beschikbaar}</strong> werkdagen beschikbaar · som doorlooptijden <strong>${sch.benodigd}</strong> wd ${sch.overschrijding ? '<span class="waarsch">parallel werk nodig</span>' : '<span class="ok">ruim</span>'}</div>` : '';
     return `<details class="fblock"${open}>
-      <summary style="--c:${f.kleur}">
-        <span class="fnaam">${htmlEsc(f.code)} ${htmlEsc(f.naam)}</span>
-        <span class="fbar"><span style="width:${fv.pct}%;background:${f.kleur}"></span></span>
-        <span class="fpct">${fv.klaar}/${fv.totaal}</span>
-      </summary>
-      <div class="fomschr">${htmlEsc(f.omschrijving)}</div>
-      ${budget}
-      ${items}
-    </details>`;
+      <summary style="--c:${f.kleur}"><span class="fnaam">${htmlEsc(f.code)} ${htmlEsc(f.naam)}</span>
+        <span class="fbar"><span style="width:${fv.pct}%;background:${f.kleur}"></span></span><span class="fpct">${fv.klaar}/${fv.totaal}</span></summary>
+      <div class="fomschr">${htmlEsc(f.omschrijving)}</div>${budget}${items}</details>`;
   }).join('');
-
-  els('#detailFasen .act-status').forEach((s) => s.addEventListener('change', (e) => {
+  els('#detailFasen .act-status').forEach((sl) => sl.addEventListener('change', (e) => {
     const { wp, code } = e.target.dataset;
     State.wpVoortgang(wp)[code] = Object.assign(State.wpVoortgang(wp)[code] || {}, { status: e.target.value });
-    State.bewaar();
-    renderDetail(wp); renderOverzicht();
+    State.bewaar(); renderDetail(wp); renderOverzicht(); renderTaken(); renderDashboard();
   }));
   els('#detailFasen .act-notitie').forEach((inp) => inp.addEventListener('change', (e) => {
     const { wp, code } = e.target.dataset;
@@ -501,59 +713,83 @@ function renderActiviteiten() {
       <p class="ref-omschr">${htmlEsc(f.omschrijving)}</p>
       <table class="ref-tabel"><tbody>
         ${f.activiteiten.map((a) => `<tr><td class="rc">${htmlEsc(a.code)}</td><td><strong>${htmlEsc(a.naam)}</strong><div class="sub">${htmlEsc(a.omschrijving)}</div></td></tr>`).join('')}
-      </tbody></table>
-    </section>`).join('');
+      </tbody></table></section>`).join('');
 }
 
-/* ----------------------------- Projecten --------------------------------- */
-function renderProjecten() {
-  const projecten = [...new Set(State.werkpakketten.map((w) => w.project))].sort();
-  el('#projectenBody').innerHTML = projecten.map((p) => {
-    const s = projectStats(p);
-    const totaal = s.aantal || 1;
-    const segs = [...FASES, { naam: 'Afgerond', kleur: '#475569' }, { naam: 'Onbekend', kleur: '#cbd5e1' }]
-      .filter((f) => s.faseTeller[f.naam])
-      .map((f) => `<div class="seg" style="width:${(s.faseTeller[f.naam] / totaal) * 100}%;background:${f.kleur}" title="${htmlEsc(f.naam)}: ${s.faseTeller[f.naam]}"></div>`).join('');
-    return `<div class="pcard" data-project="${htmlEsc(p)}">
-      <div class="pcard-kop">
-        <h3>${htmlEsc(p)}</h3>
-        ${s.kritiek ? `<span class="chip rood">${s.kritiek} kritiek</span>` : `<span class="chip groen">op koers</span>`}
-      </div>
-      <div class="pcard-stats">
-        <div><strong>${s.aantal}</strong><span>werkpakketten</span></div>
-        <div><strong>${(s.meters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}</strong><span>km tracé</span></div>
-        <div><strong>${s.pct}%</strong><span>voortgang</span></div>
-      </div>
-      <div class="fasebalk mini">${segs}</div>
-      <div class="pcard-foot">
-        <span>${s.engineers.length ? htmlEsc(s.engineers.join(', ')) : '—'}</span>
-        <span>${s.volgende ? `eerstvolgend: ${htmlEsc(s.volgende.mijlpaal.label)} · ${fmtDatum(s.volgende.datum)}` : ''}</span>
-      </div>
-      <button class="pcard-open">Open werkpakketten →</button>
-    </div>`;
-  }).join('') || '<div class="leeg">Nog geen projecten. Importeer een planning of laad voorbeelddata.</div>';
-
-  els('#projectenBody .pcard').forEach((c) => c.addEventListener('click', () => {
-    State.filters = { project: c.dataset.project, engineer: '', fase: '', zoek: '' };
-    el('#filterZoek').value = '';
-    render();
-    toonTab('werkpakketten');
+/* --------------------------- Doorlooptijden ------------------------------ */
+function renderDoorlooptijden() {
+  el('#dtBody').innerHTML = FASES.map((f) => {
+    const rows = f.activiteiten.map((a) => {
+      const eff = State.getDt(a.code);
+      const aangepast = State.doorlooptijden[a.code] != null && State.doorlooptijden[a.code] !== '';
+      return `<tr><td class="rc">${htmlEsc(a.code)}</td><td>${htmlEsc(a.naam)}</td>
+        <td class="num"><input type="number" min="0" class="dt-inp" data-code="${htmlEsc(a.code)}" value="${eff}"></td>
+        <td class="num sub">${a.dtDefault}${aangepast ? ' <span class="aangepast">aangepast</span>' : ''}</td></tr>`;
+    }).join('');
+    const somDef = f.activiteiten.reduce((s, a) => s + a.dtDefault, 0);
+    const somEff = f.activiteiten.reduce((s, a) => s + State.getDt(a.code), 0);
+    return `<section class="dt-fase"><h3 style="--c:${f.kleur}">${htmlEsc(f.code)} ${htmlEsc(f.naam)} <span class="dt-som">totaal ${somEff} werkdagen${somEff!==somDef?` (standaard ${somDef})`:''}</span></h3>
+      <table class="ref-tabel dt-tabel"><thead><tr><th>Code</th><th>Activiteit</th><th class="num">Doorlooptijd (wd)</th><th class="num">Standaard</th></tr></thead>
+      <tbody>${rows}</tbody></table></section>`;
+  }).join('');
+  els('#dtBody .dt-inp').forEach((inp) => inp.addEventListener('change', (e) => {
+    const code = e.target.dataset.code, val = e.target.value.trim();
+    if (val === '' || +val === ACTIVITEIT_INDEX[code].activiteit.dtDefault) delete State.doorlooptijden[code];
+    else State.doorlooptijden[code] = +val;
+    State.bewaar(); renderDoorlooptijden(); renderTaken();
+    if (State.actiefWp) renderDetail(State.actiefWp);
   }));
 }
 
-/* ----------------------------- Rapportage -------------------------------- */
-function renderRapportage() {
-  const wps = gefilterdeWerkpakketten();
+/* ---------------------------- Dashboard / KPI ---------------------------- */
+function dashboardWps() {
+  return State.dashScope === 'portfolio' ? State.werkpakketten : State.werkpakketten.filter((w) => w.project === State.dashScope);
+}
+function renderDashboard() {
+  const projecten = [...new Set(State.werkpakketten.map((w) => w.project))].sort();
+  if (State.dashScope !== 'portfolio' && !projecten.includes(State.dashScope)) State.dashScope = 'portfolio';
+  el('#dashScope').innerHTML = [`<button data-scope="portfolio"${State.dashScope === 'portfolio' ? ' class="actief"' : ''}>Portfolio</button>`]
+    .concat(projecten.map((p) => `<button data-scope="${htmlEsc(p)}"${State.dashScope === p ? ' class="actief"' : ''}>${htmlEsc(p)}</button>`)).join('');
+  els('#dashScope button').forEach((b) => b.addEventListener('click', () => { State.dashScope = b.dataset.scope; renderDashboard(); }));
 
-  // 1) statusverdeling over alle activiteiten
+  const wps = dashboardWps();
+  const s = statsVoor(wps);
+
   const telling = { open: 0, bezig: 0, gereed: 0, geblokkeerd: 0, nvt: 0 };
+  let actGereed = 0, actTotaal = 0;
   wps.forEach((w) => {
     const v = State.voortgang[w.id] || {};
     FASES.forEach((f) => f.activiteiten.forEach((a) => {
       const st = (v[a.code] && v[a.code].status) || 'open';
       telling[st]++;
+      if (st !== 'nvt') { actTotaal++; if (st === 'gereed') actGereed++; }
     }));
   });
+
+  const grens30 = new Date(VANDAAG); grens30.setDate(grens30.getDate() + 30);
+  let mp30 = 0;
+  wps.forEach((w) => MIJLPALEN.forEach((m) => { const d = parseDatum(w.mijlpalen[m.key]); if (d && d >= VANDAAG && d <= grens30) mp30++; }));
+
+  let trend = '';
+  if (State.snapshots.length) {
+    const vorige = State.snapshots[State.snapshots.length - 1];
+    const basis = State.dashScope === 'portfolio' ? vorige.pct : (vorige.perProject[State.dashScope] ?? s.pct);
+    const d = s.pct - basis;
+    if (d > 0) trend = `<div class="kpi-trend up">▲ +${d}% sinds ${fmtDatum(parseDatum(vorige.datum))}</div>`;
+    else if (d < 0) trend = `<div class="kpi-trend down">▼ ${d}% sinds ${fmtDatum(parseDatum(vorige.datum))}</div>`;
+    else trend = `<div class="kpi-trend flat">– gelijk sinds ${fmtDatum(parseDatum(vorige.datum))}</div>`;
+  }
+
+  el('#dashKpis').innerHTML = `
+    <div class="kpi"><div class="kpi-val">${s.aantal}</div><div class="kpi-label">Werkpakketten</div></div>
+    <div class="kpi kpi-paars"><div class="kpi-val">${(s.meters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}<small> km</small></div><div class="kpi-label">Nieuw tracé</div></div>
+    <div class="kpi kpi-groen"><div class="kpi-val">${s.pct}<small>%</small></div><div class="kpi-label">Gem. voortgang</div>${trend}</div>
+    <div class="kpi"><div class="kpi-val">${actGereed}<small>/${actTotaal}</small></div><div class="kpi-label">Activiteiten gereed</div></div>
+    <div class="kpi kpi-rood"><div class="kpi-val">${s.kritiek}</div><div class="kpi-label">Kritieke werkpakketten</div></div>
+    <div class="kpi kpi-amber"><div class="kpi-val">${s.gevaar}</div><div class="kpi-label">Werkpakketten met risico</div></div>
+    <div class="kpi kpi-rood"><div class="kpi-val">${telling.geblokkeerd}</div><div class="kpi-label">Geblokkeerde activiteiten</div></div>
+    <div class="kpi"><div class="kpi-val">${mp30}</div><div class="kpi-label">Mijlpalen ≤ 30 dagen</div></div>`;
+
   const totAct = Object.values(telling).reduce((a, b) => a + b, 0) || 1;
   let acc = 0;
   const stops = Object.entries(telling).filter(([, n]) => n > 0).map(([k, n]) => {
@@ -565,164 +801,334 @@ function renderRapportage() {
     `<span class="leg"><i style="background:${STATUSSEN[k].kleur}"></i>${STATUSSEN[k].label}: <strong>${n}</strong></span>`).join('');
   el('#rapStatusKern').innerHTML = `<strong>${Math.round((telling.gereed / totAct) * 100)}%</strong><span>gereed</span>`;
 
-  // 2) komende 30 dagen: mijlpalen (fase-overgangen) als deadlines
-  const grens = new Date(VANDAAG); grens.setDate(grens.getDate() + 30);
+  const totWp = wps.length || 1;
+  el('#dashFaseBalk').innerHTML = [...FASES.map((f) => f.naam), 'Afgerond', 'Onbekend']
+    .filter((n) => s.faseTeller[n]).map((n) => {
+      const fase = FASES.find((f) => f.naam === n);
+      const kleur = fase ? fase.kleur : (n === 'Afgerond' ? '#475569' : '#cbd5e1');
+      return `<div class="seg" style="width:${(s.faseTeller[n]/totWp)*100}%;background:${kleur}" title="${htmlEsc(n)}: ${s.faseTeller[n]}"></div>`;
+    }).join('');
+  el('#dashFaseLegenda').innerHTML = [...FASES, { naam: 'Afgerond', kleur: '#475569' }]
+    .filter((f) => s.faseTeller[f.naam]).map((f) => `<span class="leg"><i style="background:${f.kleur}"></i>${htmlEsc(f.naam)} (${s.faseTeller[f.naam]})</span>`).join('');
+  el('#dashRisk').innerHTML = `
+    <div class="risk-tile" style="background:#f0fdf4"><b style="color:#047857">${s.opKoers}</b><span>op koers</span></div>
+    <div class="risk-tile" style="background:#fffbeb"><b style="color:#b45309">${s.gevaar}</b><span>aandacht / risico</span></div>
+    <div class="risk-tile" style="background:#fef2f2"><b style="color:#b91c1c">${s.kritiek}</b><span>kritiek</span></div>`;
+
+  const grens = new Date(VANDAAG); grens.setDate(grens.getDate() + 60);
   const komend = [];
-  wps.forEach((w) => MIJLPALEN.forEach((m) => {
-    const d = parseDatum(w.mijlpalen[m.key]);
-    if (d && d >= VANDAAG && d <= grens) komend.push({ wp: w, mijlpaal: m, datum: d });
-  }));
+  wps.forEach((w) => MIJLPALEN.forEach((m) => { const d = parseDatum(w.mijlpalen[m.key]); if (d && d >= VANDAAG && d <= grens) komend.push({ wp: w, mijlpaal: m, datum: d }); }));
   komend.sort((a, b) => a.datum - b.datum);
-  el('#rapKomendTitel').textContent = `Komende 30 dagen — ${komend.length} mijlpaal-deadlines`;
-  el('#rapKomend').innerHTML = komend.length ? komend.map((k) => {
-    const dagen = Math.round((k.datum - VANDAAG) / 864e5);
-    return `<li data-wp="${htmlEsc(k.wp.id)}">
-      <span class="dl-datum">${fmtDatum(k.datum)} <em>(${dagen}d)</em></span>
-      <span class="dl-tekst"><strong>${htmlEsc(k.wp.project)} · ${htmlEsc(k.wp.wp)}</strong> — ${htmlEsc(k.mijlpaal.label)}</span>
-    </li>`;
-  }).join('') : '<li class="leeg">Geen mijlpalen in de komende 30 dagen.</li>';
+  el('#rapKomendTitel').innerHTML = `Naderende mijlpalen <span class="tel">≤ 60 dagen · ${komend.length}</span>`;
+  el('#rapKomend').innerHTML = komend.length ? komend.slice(0, 40).map((k) => {
+    const dagen = dagenVerschil(VANDAAG, k.datum);
+    return `<li data-wp="${htmlEsc(k.wp.id)}"><span class="dl-datum">${fmtDatum(k.datum)} <em>(${dagen}d)</em></span>
+      <span class="dl-tekst"><strong>${htmlEsc(k.wp.project)} · ${htmlEsc(k.wp.wp)}</strong> — ${htmlEsc(k.mijlpaal.label)}</span></li>`;
+  }).join('') : '<li class="leeg">Geen mijlpalen in de komende 60 dagen.</li>';
   els('#rapKomend li[data-wp]').forEach((li) => li.addEventListener('click', () => openDetail(li.dataset.wp)));
 
-  // 3) kritieke punten / aandacht
-  const kritiek = [];
-  wps.forEach((w) => { const sg = signalen(w); if (sg.length) kritiek.push({ wp: w, sigs: sg, ernst: maxErnst(sg) }); });
-  kritiek.sort((a, b) => b.ernst - a.ernst);
-  el('#rapKritiekTitel').textContent = `Kritiek & aandacht — ${kritiek.length} werkpakketten`;
-  el('#rapKritiek').innerHTML = kritiek.length ? kritiek.map((k) =>
-    `<li data-wp="${htmlEsc(k.wp.id)}" class="ernst-${k.ernst}">
-      <span class="kr-wp"><strong>${htmlEsc(k.wp.project)} · ${htmlEsc(k.wp.wp)}</strong></span>
-      <span class="kr-sigs">${k.sigs.map((s) => `<span class="sig sig-${s.type}">${htmlEsc(s.tekst)}</span>`).join('')}</span>
-    </li>`).join('') : '<li class="leeg">Geen kritieke punten. 👍</li>';
+  const projHtml = (State.dashScope === 'portfolio'
+    ? [...new Set(wps.map((w) => w.project))].sort().map((p) => ({ naam: p, set: wps.filter((w) => w.project === p) }))
+    : [...new Set(wps.map(apdVan))].sort().map((apd) => ({ naam: 'APD ' + apd, set: wps.filter((w) => apdVan(w) === apd) }))
+  ).map(({ naam, set }) => {
+    const pct = Math.round(set.reduce((su, w) => su + activiteitVoortgang(w).pct, 0) / set.length);
+    return `<div class="rp-rij"><span class="rp-naam">${htmlEsc(naam)}</span><span class="bar wide groen"><span style="width:${pct}%"></span></span><span class="rp-pct">${pct}%</span></div>`;
+  }).join('');
+  el('#rapProjecten').innerHTML = projHtml || '<div class="leeg">—</div>';
+
+  const kritiekLijst = [];
+  wps.forEach((w) => { const sg = signalen(w); if (sg.length) kritiekLijst.push({ wp: w, sigs: sg, ernst: maxErnst(sg) }); });
+  kritiekLijst.sort((a, b) => b.ernst - a.ernst);
+  el('#rapKritiekTitel').innerHTML = `Kritiek &amp; aandacht <span class="tel">${kritiekLijst.length} werkpakketten</span>`;
+  el('#rapKritiek').innerHTML = kritiekLijst.length ? kritiekLijst.map((k) =>
+    `<li data-wp="${htmlEsc(k.wp.id)}" class="ernst-${k.ernst}"><span class="kr-wp"><strong>${htmlEsc(k.wp.project)} · ${htmlEsc(apdVan(k.wp))} · ${htmlEsc(k.wp.wp)}</strong></span>
+      <span class="kr-sigs">${k.sigs.map((sg) => `<span class="sig sig-${sg.type}">${htmlEsc(sg.tekst)}</span>`).join('')}</span></li>`).join('')
+    : '<li class="leeg">Geen kritieke punten. 👍</li>';
   els('#rapKritiek li[data-wp]').forEach((li) => li.addEventListener('click', () => openDetail(li.dataset.wp)));
 
-  // 4) voortgang per project (alleen projecten in selectie)
-  const projecten = [...new Set(wps.map((w) => w.project))].sort();
-  el('#rapProjecten').innerHTML = projecten.map((p) => {
-    const pw = wps.filter((w) => w.project === p);
-    const pct = Math.round(pw.reduce((s, w) => s + activiteitVoortgang(w).pct, 0) / pw.length);
-    return `<div class="rp-rij"><span class="rp-naam">${htmlEsc(p)}</span>
-      <span class="bar wide"><span style="width:${pct}%"></span></span><span class="rp-pct">${pct}%</span></div>`;
+  const engs = {};
+  wps.forEach((w) => {
+    const e = w.engineer || '—';
+    if (!engs[e]) engs[e] = { n: 0, pctSom: 0, bezig: 0 };
+    const av = activiteitVoortgang(w);
+    engs[e].n++; engs[e].pctSom += av.pct; engs[e].bezig += av.bezig;
+  });
+  el('#dashEngineers').innerHTML = Object.entries(engs).sort((a, b) => b[1].n - a[1].n).map(([e, o]) => {
+    const pct = Math.round(o.pctSom / o.n);
+    return `<div class="eng-rij"><span>${htmlEsc(e)}</span><span class="bar wide"><span style="width:${pct}%"></span></span><span class="eng-tel">${o.n} WP · ${o.bezig} bezig</span></div>`;
+  }).join('') || '<div class="leeg">—</div>';
+
+  const apdSet = {};
+  wps.forEach((w) => { const a = apdVan(w); if (!apdSet[a]) apdSet[a] = []; apdSet[a].push(w); });
+  el('#dashApd').innerHTML = Object.entries(apdSet).sort().map(([a, set]) => {
+    const pct = Math.round(set.reduce((su, w) => su + activiteitVoortgang(w).pct, 0) / set.length);
+    return `<div class="rp-rij"><span class="rp-naam">APD ${htmlEsc(a)}</span><span class="bar wide"><span style="width:${pct}%"></span></span><span class="rp-pct">${pct}%</span></div>`;
   }).join('') || '<div class="leeg">—</div>';
 }
 
-/* --------------------------- Doorlooptijden ------------------------------ */
-function renderDoorlooptijden() {
-  el('#dtBody').innerHTML = FASES.map((f) => {
-    const rows = f.activiteiten.map((a) => {
-      const eff = State.getDt(a.code);
-      const aangepast = State.doorlooptijden[a.code] != null && State.doorlooptijden[a.code] !== '';
-      return `<tr>
-        <td class="rc">${htmlEsc(a.code)}</td>
-        <td>${htmlEsc(a.naam)}</td>
-        <td class="num"><input type="number" min="0" class="dt-inp" data-code="${htmlEsc(a.code)}" value="${eff}"></td>
-        <td class="num sub">${a.dtDefault}${aangepast ? ' <span class="aangepast">aangepast</span>' : ''}</td>
-      </tr>`;
-    }).join('');
-    const somDef = f.activiteiten.reduce((s, a) => s + a.dtDefault, 0);
-    const somEff = f.activiteiten.reduce((s, a) => s + State.getDt(a.code), 0);
-    return `<section class="dt-fase">
-      <h3 style="--c:${f.kleur}">${htmlEsc(f.code)} ${htmlEsc(f.naam)} <span class="dt-som">totaal ${somEff} werkdagen${somEff!==somDef?` (standaard ${somDef})`:''}</span></h3>
-      <table class="ref-tabel dt-tabel"><thead><tr><th>Code</th><th>Activiteit</th><th class="num">Doorlooptijd (wd)</th><th class="num">Standaard</th></tr></thead>
-      <tbody>${rows}</tbody></table>
-    </section>`;
-  }).join('');
+/* ----------------------- Rapporten (AI) — periodes ----------------------- */
+function periodeOpties(type) {
+  const out = [];
+  if (type === 'maand') {
+    let d = new Date(VANDAAG.getFullYear(), VANDAAG.getMonth(), 1);
+    for (let i = 0; i < 12; i++) {
+      const van = new Date(d.getFullYear(), d.getMonth(), 1);
+      const tot = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      out.push({ id: isoDatum(van), van, tot, label: van.toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' }) });
+      d = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    }
+  } else {
+    let q = Math.floor(VANDAAG.getMonth() / 3), jaar = VANDAAG.getFullYear();
+    for (let i = 0; i < 8; i++) {
+      const van = new Date(jaar, q * 3, 1);
+      const tot = new Date(jaar, q * 3 + 3, 0);
+      out.push({ id: `${jaar}-Q${q + 1}`, van, tot, label: `Q${q + 1} ${jaar}` });
+      q--; if (q < 0) { q = 3; jaar--; }
+    }
+  }
+  return out;
+}
 
-  els('#dtBody .dt-inp').forEach((inp) => inp.addEventListener('change', (e) => {
-    const code = e.target.dataset.code;
-    const val = e.target.value.trim();
-    if (val === '' || +val === ACTIVITEIT_INDEX[code].activiteit.dtDefault) delete State.doorlooptijden[code];
-    else State.doorlooptijden[code] = +val;
-    State.bewaar();
-    renderDoorlooptijden();
-    if (State.actiefWp) renderDetail(State.actiefWp);
-    renderRapportage();
+function renderRapportenControls() {
+  const type = el('#rapType').value || 'maand';
+  const opties = periodeOpties(type);
+  el('#rapPeriode').innerHTML = opties.map((o, i) => `<option value="${o.id}"${i === 0 ? ' selected' : ''}>${htmlEsc(o.label)}</option>`).join('');
+  const projecten = [...new Set(State.werkpakketten.map((w) => w.project))].sort();
+  el('#rapScopeKeuze').innerHTML = `<option value="portfolio">Hele portfolio</option>` +
+    projecten.map((p) => `<option value="${htmlEsc(p)}">${htmlEsc(p)}</option>`).join('');
+}
+
+/* --------------- Rapport: bereken cijfers (terug- & vooruit) ------------- */
+function bouwRapportData(scope, van, tot, label) {
+  const wps = scope === 'portfolio' ? State.werkpakketten : State.werkpakketten.filter((w) => w.project === scope);
+  const s = statsVoor(wps);
+
+  const telling = { open: 0, bezig: 0, gereed: 0, geblokkeerd: 0, nvt: 0 };
+  wps.forEach((w) => { const v = State.voortgang[w.id] || {}; FASES.forEach((f) => f.activiteiten.forEach((a) => { telling[(v[a.code] && v[a.code].status) || 'open']++; })); });
+
+  const mpPeriode = [];
+  wps.forEach((w) => MIJLPALEN.forEach((m) => {
+    const d = parseDatum(w.mijlpalen[m.key]);
+    if (d && d >= van && d <= tot) {
+      const fase = FASES.find((f) => f.eindMijlpaal === m.key);
+      let status = 'gepland';
+      if (d <= VANDAAG) {
+        if (fase) { const fv = faseVoortgang(w, fase); status = fv.pct >= 100 ? 'behaald' : `nog ${fv.pct}% gereed`; }
+        else status = 'gepasseerd';
+      }
+      mpPeriode.push({ wp: `${w.project} · ${w.wp}`, mijlpaal: m.label, datum: fmtDatum(d), status });
+    }
+  }));
+
+  const snapVoor = snapshotVoor(isoDatum(van));
+  const snapNa = snapshotVoor(isoDatum(tot < VANDAAG ? tot : VANDAAG));
+  let voortgangsDelta = null;
+  if (snapVoor && snapNa && snapVoor.datum !== snapNa.datum) {
+    const a = scope === 'portfolio' ? snapVoor.pct : (snapVoor.perProject[scope] ?? null);
+    const b = scope === 'portfolio' ? snapNa.pct : (snapNa.perProject[scope] ?? null);
+    if (a != null && b != null) voortgangsDelta = { vanPct: a, naarPct: b, deltaPct: b - a, vanDatum: snapVoor.datum, naarDatum: snapNa.datum };
+  }
+
+  const horizonTot = new Date(Math.max(tot.getTime(), VANDAAG.getTime()));
+  horizonTot.setDate(horizonTot.getDate() + 45);
+  const mpKomend = [];
+  wps.forEach((w) => MIJLPALEN.forEach((m) => {
+    const d = parseDatum(w.mijlpalen[m.key]);
+    if (d && d > VANDAAG && d <= horizonTot) mpKomend.push({ wp: `${w.project} · ${w.wp}`, mijlpaal: m.label, datum: fmtDatum(d), dagen: dagenVerschil(VANDAAG, d) });
+  }));
+  mpKomend.sort((a, b) => a.dagen - b.dagen);
+
+  const taken = komendeTaken(wps, horizonTot);
+  const kritiek = taken.filter((t) => t.ernst >= 3).slice(0, 25).map((t) => ({
+    wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`,
+    fase: t.fase.naam, reden: t.overtijd ? 'fase over einddatum' : (t.status === 'geblokkeerd' ? 'geblokkeerd' : 'doorlooptijd past niet meer'),
+    faseEind: fmtDatum(t.faseEind),
+  }));
+  const gevaar = taken.filter((t) => t.ernst === 2).slice(0, 25).map((t) => ({
+    wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`, fase: t.fase.naam, spelingWd: t.speling, faseEind: fmtDatum(t.faseEind),
+  }));
+
+  const perProject = [...new Set(wps.map((w) => w.project))].sort().map((p) => {
+    const ps = statsVoor(wps.filter((w) => w.project === p));
+    return { project: p, werkpakketten: ps.aantal, apds: ps.apds.length, voortgang: ps.pct, kritiek: ps.kritiek, risico: ps.gevaar };
+  });
+
+  return {
+    scope, label, peildatum: fmtDatum(VANDAAG),
+    periode: { van: fmtDatum(van), tot: fmtDatum(tot) },
+    kerncijfers: { werkpakketten: s.aantal, projecten: [...new Set(wps.map((w) => w.project))].length, apds: s.apds.length, kmNieuwTrace: +(s.meters / 1000).toFixed(1), gemVoortgangPct: s.pct, kritiekeWerkpakketten: s.kritiek, risicoWerkpakketten: s.gevaar, geblokkeerdeActiviteiten: telling.geblokkeerd },
+    statusverdelingActiviteiten: telling,
+    faseverdeling: s.faseTeller,
+    voortgangsontwikkeling: voortgangsDelta,
+    terugblik: { mijlpalenInPeriode: mpPeriode },
+    vooruitblik: { naderendeMijlpalen: mpKomend.slice(0, 25), kritiekeTaken: kritiek, risicoTaken: gevaar },
+    perProject,
+  };
+}
+
+function rapportPrompt(data) {
+  const system = `Je bent een ervaren projectbeheerser/PMO-adviseur bij netbeheerder-aannemer HVP. Je schrijft heldere, zakelijke Nederlandstalige management­rapportages over de bouwteamfase "Nulelie" (engineering van ondergrondse kabelverbindingen). De hiërarchie is Project ▸ APD ▸ Werkpakket.
+
+Schrijf in Markdown. Gebruik UITSLUITEND de aangeleverde cijfers en feiten — verzin geen getallen, namen of mijlpalen. Waar gegevens ontbreken, benoem dat kort. Wees concreet en stuurgericht: benoem waar het goed gaat, waar het risico loopt en wat de komende periode concreet moet gebeuren.
+
+Verplichte structuur:
+# <titel met scope en periode>
+## Samenvatting   (3-5 kernzinnen voor het management)
+## Terugblik afgelopen periode   (mijlpalen die gepland stonden en hun status; voortgangsontwikkeling indien beschikbaar)
+## Voortgang & KPI's   (kerncijfers; gebruik een korte Markdown-tabel)
+## Risico's & kritieke punten   (kritieke en risicovolle werkpakketten/taken, met de reden)
+## Vooruitblik komende periode   (naderende mijlpalen en wat er concreet gedaan moet worden)
+## Aanbevelingen   (3-6 puntsgewijze, actiegerichte aanbevelingen)
+
+Houd het bondig maar volledig; vermijd holle frasen en herhaling.`;
+
+  const prompt = `Genereer de ${data.label} voor scope "${data.scope === 'portfolio' ? 'het hele portfolio' : data.scope}".
+
+Peildatum (vandaag): ${data.peildatum}
+Rapportageperiode: ${data.periode.van} t/m ${data.periode.tot}
+
+Hieronder de in de applicatie berekende cijfers (JSON). Gebruik deze als enige bron:
+
+${JSON.stringify(data, null, 2)}`;
+
+  return { system, prompt };
+}
+
+/* ----------------------- Markdown → HTML (compact) ----------------------- */
+function markdownNaarHtml(md) {
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const inline = (s) => esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  const regels = md.replace(/\r/g, '').split('\n');
+  let html = '', i = 0;
+  while (i < regels.length) {
+    let r = regels[i];
+    if (/^\s*$/.test(r)) { i++; continue; }
+    if (/^#{1,6}\s/.test(r)) { const n = r.match(/^#+/)[0].length; html += `<h${n}>${inline(r.replace(/^#+\s/, ''))}</h${n}>`; i++; continue; }
+    if (/^\s*---+\s*$/.test(r)) { html += '<hr>'; i++; continue; }
+    if (/\|/.test(r) && i + 1 < regels.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(regels[i + 1])) {
+      const kop = r.split('|').map((c) => c.trim()).filter((c) => c.length);
+      i += 2; const body = [];
+      while (i < regels.length && /\|/.test(regels[i])) {
+        body.push(regels[i].split('|').map((c) => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === '')));
+        i++;
+      }
+      html += '<table><thead><tr>' + kop.map((c) => `<th>${inline(c)}</th>`).join('') + '</tr></thead><tbody>' +
+        body.map((row) => '<tr>' + row.map((c) => `<td>${inline(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+      continue;
+    }
+    if (/^\s*[-*]\s/.test(r)) { html += '<ul>'; while (i < regels.length && /^\s*[-*]\s/.test(regels[i])) { html += `<li>${inline(regels[i].replace(/^\s*[-*]\s/, ''))}</li>`; i++; } html += '</ul>'; continue; }
+    if (/^\s*\d+\.\s/.test(r)) { html += '<ol>'; while (i < regels.length && /^\s*\d+\.\s/.test(regels[i])) { html += `<li>${inline(regels[i].replace(/^\s*\d+\.\s/, ''))}</li>`; i++; } html += '</ol>'; continue; }
+    let p = r; i++;
+    while (i < regels.length && !/^\s*$/.test(regels[i]) && !/^#{1,6}\s/.test(regels[i]) && !/^\s*[-*]\s/.test(regels[i]) && !/\|/.test(regels[i])) { p += ' ' + regels[i]; i++; }
+    html += `<p>${inline(p)}</p>`;
+  }
+  return html;
+}
+
+/* ----------------------------- Rapport draaien --------------------------- */
+let rapportAbort = null;
+async function genereerRapport() {
+  const type = el('#rapType').value;
+  const periodeId = el('#rapPeriode').value;
+  const scope = el('#rapScopeKeuze').value;
+  const opties = periodeOpties(type);
+  const periode = opties.find((o) => o.id === periodeId) || opties[0];
+  const label = (type === 'maand' ? 'maandrapportage' : 'kwartaalrapportage') + ' — ' + periode.label;
+
+  const data = bouwRapportData(scope, periode.van, periode.tot, label);
+
+  el('#rapMetricPreview').innerHTML = [
+    ['Werkpakketten', data.kerncijfers.werkpakketten],
+    ['Gem. voortgang', data.kerncijfers.gemVoortgangPct + '%'],
+    ['Kritieke WP’s', data.kerncijfers.kritiekeWerkpakketten],
+    ['Risico WP’s', data.kerncijfers.risicoWerkpakketten],
+    ['Mijlpalen in periode', data.terugblik.mijlpalenInPeriode.length],
+    ['Mijlpalen vooruit', data.vooruitblik.naderendeMijlpalen.length],
+  ].map(([l, v]) => `<div class="mp"><b>${v}</b><span>${l}</span></div>`).join('');
+
+  const knop = el('#rapGenereer');
+  const status = el('#rapAiStatus');
+  knop.disabled = true;
+  status.innerHTML = '<span class="spinner"></span> Rapportage genereren met ' + State.model() + '…';
+  el('#rapportUitvoerKaart').style.display = 'block';
+  const doc = el('#rapportDoc');
+  doc.innerHTML = '<p class="hint">Bezig met schrijven…</p>';
+
+  if (rapportAbort) rapportAbort.abort();
+  rapportAbort = new AbortController();
+  const { system, prompt } = rapportPrompt(data);
+  try {
+    const tekst = await AI.genereer({
+      system, prompt, model: State.model(), signal: rapportAbort.signal,
+      onDelta: (vol) => { doc.innerHTML = markdownNaarHtml(vol); },
+    });
+    doc.innerHTML = `<div class="rapport-meta">Gegenereerd op ${new Date().toLocaleString('nl-NL')} · model ${State.model()} · scope ${scope === 'portfolio' ? 'hele portfolio' : scope}</div>` + markdownNaarHtml(tekst);
+    status.innerHTML = '<span style="color:#047857;font-weight:600">✓ Rapportage gereed.</span>';
+    doc._tekst = tekst;
+  } catch (e) {
+    status.innerHTML = '';
+    doc.innerHTML = `<div class="ai-waarsch">⚠️ <div><strong>Kon de rapportage niet genereren.</strong><br>${htmlEsc(e.message)}<br><span class="hint">Stel <code>ANTHROPIC_API_KEY</code> in als environment variable in Vercel. Lokaal (zonder Vercel) is de AI-service niet beschikbaar; de berekende cijfers hierboven werken wel.</span></div></div>`;
+  } finally {
+    knop.disabled = false;
+  }
+}
+
+/* ------------------------------ Instellingen ----------------------------- */
+function renderInstellingen() {
+  const dInput = el('#instPeildatum');
+  if (dInput && document.activeElement !== dInput) dInput.value = isoDatum(VANDAAG);
+  const mSel = el('#instModel');
+  if (mSel) mSel.value = State.model();
+  el('#instSnapLijst').innerHTML = State.snapshots.slice().reverse().map((s) =>
+    `<li><span>${fmtDatum(parseDatum(s.datum))} — ${s.pct}% gereed (${s.gereed}/${s.totaal})</span><button class="verwijder" data-d="${s.datum}">verwijderen</button></li>`).join('')
+    || '<li class="hint">Nog geen momentopnames vastgelegd.</li>';
+  els('#instSnapLijst .verwijder').forEach((b) => b.addEventListener('click', () => {
+    State.snapshots = State.snapshots.filter((s) => s.datum !== b.dataset.d); State.bewaar(); renderInstellingen(); renderDashboard();
   }));
 }
 
 /* ------------------------------ CSV-import ------------------------------- */
-// Parser voor het ;-gescheiden HVP-dashboard met meervoudige header-rijen.
 function parseCsv(tekst) {
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
+  const rows = []; let row = [], field = '', inQuotes = false;
   for (let i = 0; i < tekst.length; i++) {
     const c = tekst[i];
-    if (inQuotes) {
-      if (c === '"') { if (tekst[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
-      else field += c;
-    } else {
-      if (c === '"') inQuotes = true;
-      else if (c === ';') { row.push(field); field = ''; }
-      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-      else if (c === '\r') { /* skip */ }
-      else field += c;
-    }
+    if (inQuotes) { if (c === '"') { if (tekst[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; } else field += c; }
+    else { if (c === '"') inQuotes = true; else if (c === ';') { row.push(field); field = ''; } else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; } else if (c === '\r') {} else field += c; }
   }
   if (field.length || row.length) { row.push(field); rows.push(row); }
   return rows;
 }
-
 function importeerCsv(tekst) {
   const rows = parseCsv(tekst);
-  // vind de header-rij (begint met "Projectnaam")
   const headerIdx = rows.findIndex((r) => (r[0] || '').trim().toLowerCase() === 'projectnaam');
   if (headerIdx < 0) throw new Error('Kon de kolomkoppen (rij met "Projectnaam") niet vinden.');
   const header = rows[headerIdx].map((h) => h.replace(/\s+/g, ' ').trim());
-
   const colIdx = (naam) => header.findIndex((h) => h.toLowerCase() === naam.toLowerCase());
-  const find = (naam) => { const i = colIdx(naam); return i; };
-
-  const cProject = find('Projectnaam');
-  const cApd = find('APD Bouwdeel');
-  const cTrac = find('Liander Tracdeel');
+  const cProject = colIdx('Projectnaam'), cApd = colIdx('APD Bouwdeel'), cTrac = colIdx('Liander Tracdeel');
   const cWp = header.findIndex((h) => h.toLowerCase().startsWith('werkpakket'));
-  const cStart = find('Trac start');
-  const cEind = find('Trac eind');
-  const cEng = find('Engineer');
+  const cStart = colIdx('Trac start'), cEind = colIdx('Trac eind'), cEng = colIdx('Engineer');
   const cLen = header.findIndex((h) => h.toLowerCase().startsWith('lengte nieuw'));
   const cMpw = header.findIndex((h) => h.toLowerCase().startsWith('uitvoering meters'));
-
-  const mCols = {};
-  MIJLPALEN.forEach((m) => { mCols[m.key] = colIdx(m.csv); });
-
-  const nieuwe = [];
-  const gezien = new Set();
+  const mCols = {}; MIJLPALEN.forEach((m) => { mCols[m.key] = colIdx(m.csv); });
+  const nieuwe = [], gezien = new Set();
   for (let r = headerIdx + 1; r < rows.length; r++) {
     const row = rows[r];
     const project = (row[cProject] || '').trim();
     const wp = (cWp >= 0 ? row[cWp] : '').trim();
     if (!project || !wp) continue;
-    // sla lege/template-rijen (1900/1901-datums) over
-    const overdracht = cStart >= 0 ? (row[mCols.overdrachtVO] || '') : '';
     const engineer = (cEng >= 0 ? row[cEng] : '').trim();
-    const heeftEchteDatum = MIJLPALEN.some((m) => {
-      const d = parseDatum(row[mCols[m.key]]);
-      return d && d.getFullYear() > 1901;
-    });
+    const heeftEchteDatum = MIJLPALEN.some((m) => { const d = parseDatum(row[mCols[m.key]]); return d && d.getFullYear() > 1901; });
     if (!heeftEchteDatum && !engineer) continue;
-
     const mij = {};
-    MIJLPALEN.forEach((m) => {
-      const raw = (row[mCols[m.key]] || '').trim();
-      const d = parseDatum(raw);
-      mij[m.key] = (d && d.getFullYear() > 1901) ? raw : '';
-    });
-
-    const tracStart = (cStart >= 0 ? row[cStart] : '').trim();
-    const tracEind = (cEind >= 0 ? row[cEind] : '').trim();
-    let id = `${project}|${wp}|${tracStart}|${tracEind}`;
-    let n = 2; while (gezien.has(id)) { id = `${project}|${wp}|${tracStart}|${tracEind}#${n++}`; }
+    MIJLPALEN.forEach((m) => { const raw = (row[mCols[m.key]] || '').trim(); const d = parseDatum(raw); mij[m.key] = (d && d.getFullYear() > 1901) ? raw : ''; });
+    const tracStart = (cStart >= 0 ? row[cStart] : '').trim(), tracEind = (cEind >= 0 ? row[cEind] : '').trim();
+    let id = `${project}|${wp}|${tracStart}|${tracEind}`, n = 2;
+    while (gezien.has(id)) { id = `${project}|${wp}|${tracStart}|${tracEind}#${n++}`; }
     gezien.add(id);
-
-    nieuwe.push({
-      id, project,
-      apd: (cApd >= 0 ? row[cApd] : '').trim(),
-      tracdeel: (cTrac >= 0 ? row[cTrac] : '').trim(),
-      wp, tracStart, tracEind,
-      engineer,
-      lengteNieuw: parseInt((cLen >= 0 ? row[cLen] : '').replace(/\D/g, '')) || 0,
-      mPerWeek: parseInt((cMpw >= 0 ? row[cMpw] : '').replace(/\D/g, '')) || 0,
-      mijlpalen: mij,
-    });
+    nieuwe.push({ id, project, apd: (cApd >= 0 ? row[cApd] : '').trim(), tracdeel: (cTrac >= 0 ? row[cTrac] : '').trim(), wp, tracStart, tracEind, engineer, lengteNieuw: parseInt((cLen >= 0 ? row[cLen] : '').replace(/\D/g, '')) || 0, mPerWeek: parseInt((cMpw >= 0 ? row[cMpw] : '').replace(/\D/g, '')) || 0, mijlpalen: mij });
   }
   if (!nieuwe.length) throw new Error('Geen geldige werkpakket-rijen gevonden.');
   return nieuwe;
@@ -734,49 +1140,67 @@ function toonTab(naam) {
   els('.view').forEach((v) => v.classList.toggle('actief', v.id === 'view-' + naam));
 }
 
-/* ------------------------------- Init ------------------------------------ */
-function init() {
-  State.laad();
+function updateDbStatus(s) {
+  const node = el('#dbStatus'), txt = el('#dbStatusTekst');
+  node.classList.remove('online', 'offline', 'bezig');
+  const map = { online: ['online', 'Neon verbonden'], offline: ['offline', 'Offline (cache)'], bezig: ['bezig', 'Synchroniseren…'], lokaal: ['offline', 'Lokaal (geen DB)'] };
+  const [cls, label] = map[s] || map.lokaal;
+  node.classList.add(cls);
+  txt.textContent = label;
+}
 
-  // navigatie
+/* ------------------------------- Init ------------------------------------ */
+async function init() {
+  DB.onStatus((s) => updateDbStatus(s));
+  await State.laad();
+
   els('.tab').forEach((t) => t.addEventListener('click', () => toonTab(t.dataset.tab)));
   el('#detailClose').addEventListener('click', sluitDetail);
   el('#overlay').addEventListener('click', sluitDetail);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') sluitDetail(); });
 
-  // filters
-  el('#filterProject').addEventListener('change', (e) => { State.filters.project = e.target.value; render(); });
+  el('#filterProject').addEventListener('change', (e) => { State.filters.project = e.target.value; State.filters.apd = ''; render(); });
+  el('#filterApd').addEventListener('change', (e) => { State.filters.apd = e.target.value; render(); });
   el('#filterEngineer').addEventListener('change', (e) => { State.filters.engineer = e.target.value; render(); });
   el('#filterFase').addEventListener('change', (e) => { State.filters.fase = e.target.value; render(); });
-  el('#filterZoek').addEventListener('input', (e) => { State.filters.zoek = e.target.value; renderOverzicht(); renderPlanning(); });
-  el('#filterReset').addEventListener('click', () => {
-    State.filters = { project: '', engineer: '', fase: '', zoek: '' };
-    el('#filterZoek').value = ''; render();
+  el('#filterZoek').addEventListener('input', (e) => { State.filters.zoek = e.target.value; renderOverzicht(); renderPlanning(); renderTaken(); });
+  el('#filterReset').addEventListener('click', () => { State.filters = { project: '', apd: '', engineer: '', fase: '', zoek: '' }; el('#filterZoek').value = ''; render(); });
+
+  el('#rapType').addEventListener('change', renderRapportenControls);
+  el('#rapGenereer').addEventListener('click', genereerRapport);
+  el('#rapPrint').addEventListener('click', () => window.print());
+  el('#rapKopieer').addEventListener('click', () => {
+    const t = el('#rapportDoc')._tekst || el('#rapportDoc').innerText;
+    navigator.clipboard.writeText(t).then(() => toast('Rapporttekst gekopieerd', 'ok'));
   });
 
-  // import / export
+  el('#instPeildatum').addEventListener('change', (e) => {
+    const d = parseDatum(e.target.value); if (!d) return;
+    VANDAAG = d; State.instellingen.peildatum = e.target.value; State.bewaar();
+    el('#peildatum').textContent = fmtDatum(VANDAAG); render();
+  });
+  el('#instModel').addEventListener('change', (e) => { State.instellingen.model = e.target.value; State.bewaar(); });
+  el('#instSnapshot').addEventListener('click', () => { legSnapshot(); renderInstellingen(); renderDashboard(); toast('Momentopname vastgelegd', 'ok'); });
+
   el('#csvFile').addEventListener('change', (e) => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const wps = importeerCsv(reader.result);
-        State.werkpakketten = wps; State.bron = 'import'; State.bewaar(); render();
+        State.werkpakketten = wps; State.bewaar();
+        State.filters = { project: '', apd: '', engineer: '', fase: '', zoek: '' };
+        render();
         el('#importMelding').innerHTML = `<span class="ok">${wps.length} werkpakketten geïmporteerd uit "${htmlEsc(file.name)}".</span>`;
-        toonTab('projecten');
-      } catch (err) {
-        el('#importMelding').innerHTML = `<span class="fout">Import mislukt: ${htmlEsc(err.message)}</span>`;
-      }
+        toast(`${wps.length} werkpakketten geïmporteerd`, 'ok');
+        toonTab('overzicht');
+      } catch (err) { el('#importMelding').innerHTML = `<span class="fout">Import mislukt: ${htmlEsc(err.message)}</span>`; }
     };
-    reader.readAsText(file, 'utf-8');
-    e.target.value = '';
+    reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang }, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `hvp-processturing-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -786,31 +1210,36 @@ function init() {
         const data = JSON.parse(reader.result);
         if (data.werkpakketten) State.werkpakketten = data.werkpakketten;
         if (data.voortgang) State.voortgang = data.voortgang;
-        State.bron = 'import'; State.bewaar(); render();
+        if (data.doorlooptijden) State.doorlooptijden = data.doorlooptijden;
+        if (data.snapshots) State.snapshots = data.snapshots;
+        State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
-        toonTab('projecten');
-      } catch (err) {
-        el('#importMelding').innerHTML = `<span class="fout">Kon JSON niet lezen: ${htmlEsc(err.message)}</span>`;
-      }
+        toast('Werkbestand hersteld', 'ok'); toonTab('overzicht');
+      } catch (err) { el('#importMelding').innerHTML = `<span class="fout">Kon JSON niet lezen: ${htmlEsc(err.message)}</span>`; }
     };
-    reader.readAsText(file, 'utf-8');
-    e.target.value = '';
+    reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnSeed').addEventListener('click', () => {
-    if (!confirm('Voorbeelddata (Spannenburg + Joure) laden? Huidige werkpakketten worden vervangen. Voortgang blijft bewaard.')) return;
-    State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
-    State.bron = 'seed'; State.bewaar(); render(); toonTab('projecten');
+    if (!confirm('Voorbeelddata laden? Huidige werkpakketten worden vervangen. Voortgang blijft bewaard.')) return;
+    State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w })); State.bewaar(); render(); toonTab('overzicht');
   });
-  el('#btnWis').addEventListener('click', () => {
-    if (!confirm('ALLE data en voortgang wissen en opnieuw beginnen met voorbeelddata?')) return;
-    localStorage.removeItem(STORAGE_KEY);
+  el('#btnWis').addEventListener('click', async () => {
+    if (!confirm('ALLE data, voortgang en momentopnames wissen — ook in de database? Dit kan niet ongedaan gemaakt worden.')) return;
+    localStorage.removeItem(CACHE_KEY);
+    await DB.wisNeon();
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
-    State.bron = 'seed'; State.voortgang = {}; render(); toonTab('projecten');
+    State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = [];
+    State.bewaar(); render(); toonTab('overzicht'); toast('Alles gewist', 'ok');
+  });
+
+  DB.serverStatus().then((st) => {
+    const node = el('#instDbInfo');
+    if (node) node.innerHTML = `Database <strong style="color:${st.database ? '#047857' : '#b45309'}">${st.database ? 'gekoppeld' : 'niet ingesteld'}</strong> · AI <strong style="color:${st.ai ? '#047857' : '#b45309'}">${st.ai ? 'beschikbaar' : 'niet ingesteld'}</strong>`;
   });
 
   el('#peildatum').textContent = fmtDatum(VANDAAG);
   render();
-  toonTab('projecten');
+  toonTab('overzicht');
 }
 
 document.addEventListener('DOMContentLoaded', init);

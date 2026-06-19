@@ -1,0 +1,15 @@
+{
+  "name": "hvp-procesturing",
+  "version": "2.0.0",
+  "private": true,
+  "description": "HVP Procesturing — besturing van de bouwteamfase Nulelie (Vercel + Neon + Anthropic)",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

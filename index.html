@@ -15,62 +15,49 @@
         <p class="peil">Peildatum: <strong id="peildatum"></strong></p>
       </div>
     </div>
-    <nav class="tabs">
-      <button class="tab actief" data-tab="projecten">Projecten</button>
-      <button class="tab" data-tab="werkpakketten">Werkpakketten</button>
-      <button class="tab" data-tab="planning">Planning</button>
-      <button class="tab" data-tab="rapportage">Rapportage</button>
-      <button class="tab" data-tab="activiteiten">Activiteiten</button>
-      <button class="tab" data-tab="doorlooptijden">Doorlooptijden</button>
-      <button class="tab" data-tab="import">Import / Export</button>
-    </nav>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div id="dbStatus" class="db-status offline" title="Verbindingsstatus database"><span class="stip"></span><span id="dbStatusTekst">Lokaal</span></div>
+      <nav class="tabs">
+        <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
+        <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
+        <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
+        <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
+        <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
+        <button class="tab" data-tab="activiteiten"><span class="ico">≣</span>Activiteiten</button>
+        <button class="tab" data-tab="doorlooptijden"><span class="ico">⏱</span>Doorlooptijden</button>
+        <button class="tab" data-tab="beheer"><span class="ico">⚙</span>Beheer</button>
+      </nav>
+    </div>
   </header>
 
   <div class="filterbalk">
-    <input id="filterZoek" type="search" placeholder="Zoek project, werkpakket, engineer…">
+    <input id="filterZoek" type="search" placeholder="Zoek project, APD, werkpakket, engineer…">
     <select id="filterProject"></select>
+    <select id="filterApd"></select>
     <select id="filterEngineer"></select>
     <select id="filterFase"></select>
     <button id="filterReset" class="ghost">Reset</button>
   </div>
 
   <main>
-    <!-- PROJECTEN -->
-    <section id="view-projecten" class="view actief">
-      <div class="card">
-        <div class="card-kop"><h2>Projecten</h2><span class="hint">Klik op een project om de werkpakketten te openen</span></div>
-        <div id="projectenBody" class="projecten-grid"></div>
-      </div>
-    </section>
-
-    <!-- WERKPAKKETTEN -->
-    <section id="view-werkpakketten" class="view">
+    <!-- ================= OVERZICHT (hiërarchisch) ================= -->
+    <section id="view-overzicht" class="view actief">
+      <div id="kruimels" class="kruimels"></div>
       <div id="kpis" class="kpis"></div>
 
       <div class="card">
-        <div class="card-kop"><h2>Faseverdeling werkpakketten</h2></div>
+        <div class="card-kop"><h2 id="faseTitel">Faseverdeling</h2><span class="hint">Verdeling van werkpakketten over de bouwteamfasen op de peildatum</span></div>
         <div id="faseBalk" class="fasebalk"></div>
         <div id="faseLegenda" class="legenda"></div>
       </div>
 
-      <div class="card">
-        <div class="card-kop"><h2>Werkpakketten</h2><span class="hint">Klik op een rij voor de activiteiten-checklist</span></div>
-        <div class="tabel-wrap">
-          <table class="tabel">
-            <thead><tr>
-              <th>Project</th><th>Werkpakket</th><th>Engineer</th><th class="num">Meters</th>
-              <th>Huidige fase</th><th>DO → UO</th><th>Voortgang activiteiten</th>
-            </tr></thead>
-            <tbody id="tabelBody"></tbody>
-          </table>
-        </div>
-      </div>
+      <div id="hierInhoud"></div>
     </section>
 
-    <!-- PLANNING -->
+    <!-- ================= PLANNING ================= -->
     <section id="view-planning" class="view">
       <div class="card">
-        <div class="card-kop"><h2>Planning per werkpakket (fasen)</h2></div>
+        <div class="card-kop"><h2>Planning per werkpakket (fasen)</h2><span class="hint">Gekleurde fasen met een vandaag-lijn op de peildatum · klik op een rij voor het detail</span></div>
         <div id="ganttLegenda" class="legenda"></div>
         <div class="gantt">
           <div id="ganttAs" class="gantt-as"></div>
@@ -79,9 +66,35 @@
       </div>
     </section>
 
-    <!-- RAPPORTAGE -->
-    <section id="view-rapportage" class="view">
-      <div class="rap-grid">
+    <!-- ================= TAKEN ================= -->
+    <section id="view-taken" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Takenoverzicht — komende periode</h2>
+          <p>Wat moet er de komende periode gebeuren? Berekend uit de fasevensters en doorlooptijden. Kritieke taken en taken die gevaar lopen staan bovenaan.</p>
+        </div>
+        <div class="seg-control" id="horizonKiezer"></div>
+      </div>
+      <div class="card">
+        <div class="card-kop"><h2 id="takenPeriode">Periode</h2></div>
+        <div id="takenStats" class="taken-stats"></div>
+      </div>
+      <div id="takenLijst"></div>
+    </section>
+
+    <!-- ================= DASHBOARD / RAPPORTAGE ================= -->
+    <section id="view-dashboard" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Stuur- &amp; KPI-dashboard</h2>
+          <p>Zinvolle stuurinformatie over het hele portfolio of per project — voortgang, risico's, bezetting en naderende mijlpalen.</p>
+        </div>
+        <div class="seg-control" id="dashScope"></div>
+      </div>
+
+      <div id="dashKpis" class="kpis"></div>
+
+      <div class="grid-2">
         <div class="card">
           <div class="card-kop"><h2>Statusverdeling activiteiten</h2></div>
           <div class="donut-wrap">
@@ -90,21 +103,88 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-kop"><h2 id="rapKomendTitel">Komende 30 dagen</h2></div>
-          <ul id="rapKomend" class="deadline-lijst"></ul>
+          <div class="card-kop"><h2>Faseverdeling</h2></div>
+          <div id="dashFaseBalk" class="fasebalk"></div>
+          <div id="dashFaseLegenda" class="legenda" style="margin-top:14px"></div>
+          <div class="risk-tiles" id="dashRisk" style="margin-top:18px"></div>
         </div>
       </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-kop"><h2 id="rapKomendTitel">Naderende mijlpalen</h2></div>
+          <ul id="rapKomend" class="deadline-lijst"></ul>
+        </div>
+        <div class="card">
+          <div class="card-kop"><h2>Voortgang per project</h2></div>
+          <div id="rapProjecten" class="rp-lijst"></div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-kop"><h2 id="rapKritiekTitel">Kritiek &amp; aandacht</h2><span class="hint">Achterstand, naderende deadlines, geblokkeerd of krappe doorlooptijden</span></div>
         <ul id="rapKritiek" class="kritiek-lijst"></ul>
       </div>
-      <div class="card">
-        <div class="card-kop"><h2>Voortgang per project</h2></div>
-        <div id="rapProjecten" class="rp-lijst"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-kop"><h2>Bezetting per engineer</h2><span class="hint">Werkpakketten &amp; lopende activiteiten</span></div>
+          <div id="dashEngineers" class="minibars"></div>
+        </div>
+        <div class="card">
+          <div class="card-kop"><h2>Voortgang per APD</h2></div>
+          <div id="dashApd" class="rp-lijst"></div>
+        </div>
       </div>
     </section>
 
-    <!-- ACTIVITEITEN -->
+    <!-- ================= RAPPORTEN (AI) ================= -->
+    <section id="view-rapporten" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Maand- &amp; kwartaalrapportages</h2>
+          <p>Genereer een management­rapportage met een terugblik op de afgelopen periode én een vooruitblik op wat er nog moet gebeuren. De cijfers worden in de app berekend; de Anthropic-API schrijft het verhaal.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="rapport-config">
+          <div class="veld">
+            <label>Type rapportage</label>
+            <select id="rapType">
+              <option value="maand">Maandrapportage</option>
+              <option value="kwartaal">Kwartaalrapportage</option>
+            </select>
+          </div>
+          <div class="veld">
+            <label>Periode</label>
+            <select id="rapPeriode"></select>
+          </div>
+          <div class="veld">
+            <label>Scope</label>
+            <select id="rapScopeKeuze"></select>
+          </div>
+          <div class="veld">
+            <button id="rapGenereer" class="primair"><span class="ico">✦</span> Genereer rapportage</button>
+          </div>
+        </div>
+        <div id="rapAiStatus" class="ai-status"></div>
+        <div id="rapMetricPreview" class="metric-preview"></div>
+      </div>
+
+      <div class="card" id="rapportUitvoerKaart" style="display:none">
+        <div class="card-kop">
+          <h2>Rapportage</h2>
+          <div class="knoppenrij">
+            <button id="rapPrint" class="ghost">Print / PDF</button>
+            <button id="rapKopieer" class="ghost">Kopieer tekst</button>
+          </div>
+        </div>
+        <div id="rapportDoc" class="rapport-doc"></div>
+      </div>
+    </section>
+
+    <!-- ================= ACTIVITEITEN ================= -->
     <section id="view-activiteiten" class="view">
       <div class="card">
         <div class="card-kop"><h2>Activiteitenbibliotheek</h2><span class="hint">Bron: Werkpakketactiviteiten beschrijvingen Nulelie 2.0</span></div>
@@ -112,30 +192,64 @@
       </div>
     </section>
 
-    <!-- DOORLOOPTIJDEN -->
+    <!-- ================= DOORLOOPTIJDEN ================= -->
     <section id="view-doorlooptijden" class="view">
       <div class="card">
-        <div class="card-kop"><h2>Doorlooptijden per activiteit</h2><span class="hint">In werkdagen — pas aan waar nodig. Wordt gebruikt voor planningscontrole en signalen.</span></div>
+        <div class="card-kop"><h2>Doorlooptijden per activiteit</h2><span class="hint">In werkdagen — pas aan waar nodig. Wordt gebruikt voor de takenplanning en signalen.</span></div>
         <div id="dtBody" class="dt"></div>
       </div>
     </section>
 
-    <!-- IMPORT -->
-    <section id="view-import" class="view">
-      <div class="card">
-        <div class="card-kop"><h2>Planning importeren (CSV)</h2></div>
-        <p>Importeer het HVP-engineeringsdashboard (<code>;</code>-gescheiden CSV). De projecten, werkpakketten en mijlpaaldata worden automatisch ingelezen.</p>
-        <label class="filebtn">Kies CSV-bestand<input id="csvFile" type="file" accept=".csv,text/csv" hidden></label>
-        <div id="importMelding" class="melding"></div>
+    <!-- ================= BEHEER (import/export + instellingen) ================= -->
+    <section id="view-beheer" class="view">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-kop"><h2>Planning importeren (CSV)</h2></div>
+          <p class="sub">Importeer het HVP-engineeringsdashboard (<code>;</code>-gescheiden CSV). Projecten, APD's, werkpakketten en mijlpaaldata worden automatisch ingelezen.</p>
+          <label class="filebtn">Kies CSV-bestand<input id="csvFile" type="file" accept=".csv,text/csv" hidden></label>
+          <div id="importMelding" class="melding"></div>
+        </div>
+        <div class="card">
+          <div class="card-kop"><h2>Werkbestand beheren</h2></div>
+          <p class="sub">Voortgang wordt lokaal én (indien gekoppeld) in de Neon-database bewaard. Exporteer een JSON-back-up of herstel er een.</p>
+          <div class="knoppenrij">
+            <button id="btnExport" class="primair">Exporteer (JSON)</button>
+            <label class="filebtn">Herstel<input id="jsonFile" type="file" accept=".json,application/json" hidden></label>
+            <button id="btnSeed" class="ghost">Voorbeelddata</button>
+            <button id="btnWis" class="gevaar">Alles wissen</button>
+          </div>
+        </div>
       </div>
+
       <div class="card">
-        <div class="card-kop"><h2>Werkbestand (voortgang) beheren</h2></div>
-        <p>Voortgang wordt automatisch lokaal in de browser bewaard. Exporteer een back-up of deel hem met collega's.</p>
-        <div class="knoppenrij">
-          <button id="btnExport" class="primair">Exporteer werkbestand (JSON)</button>
-          <label class="filebtn">Herstel werkbestand<input id="jsonFile" type="file" accept=".json,application/json" hidden></label>
-          <button id="btnSeed" class="ghost">Voorbeelddata laden</button>
-          <button id="btnWis" class="gevaar">Alles wissen</button>
+        <div class="card-kop"><h2>Instellingen</h2></div>
+        <div class="inst-grid">
+          <div class="inst-veld">
+            <label>Peildatum ("vandaag")</label>
+            <span class="uitleg">Bepaalt de huidige fase, signalen en de takenhorizon.</span>
+            <input id="instPeildatum" type="date">
+          </div>
+          <div class="inst-veld">
+            <label>AI-model voor rapportages</label>
+            <span class="uitleg">Wordt server-side gebruikt via de Anthropic-API. Opus 4.8 geeft de beste kwaliteit.</span>
+            <select id="instModel">
+              <option value="claude-opus-4-8">Claude Opus 4.8 (aanbevolen)</option>
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (sneller)</option>
+              <option value="claude-haiku-4-5">Claude Haiku 4.5 (snelst/goedkoopst)</option>
+            </select>
+          </div>
+          <div class="inst-veld">
+            <label>Database &amp; API-sleutels</label>
+            <span class="uitleg">De Neon-connectionstring (<code>DATABASE_URL</code>) en de Anthropic-sleutel (<code>ANTHROPIC_API_KEY</code>) worden als <strong>environment variables in Vercel</strong> ingesteld — niet hier in de browser. Status: <span id="instDbInfo"></span></span>
+          </div>
+          <div class="inst-veld">
+            <label>Momentopnames (voor trends &amp; terugblik)</label>
+            <span class="uitleg">Leg de huidige voortgang vast zodat rapportages echte ontwikkeling kunnen tonen.</span>
+            <div class="knoppenrij" style="margin-top:4px">
+              <button id="instSnapshot" class="primair">Momentopname vastleggen</button>
+            </div>
+            <ul id="instSnapLijst" class="snap-lijst"></ul>
+          </div>
         </div>
       </div>
     </section>
@@ -164,8 +278,12 @@
     </div>
   </aside>
 
+  <div id="toast" class="toast"></div>
+
   <script src="js/activiteiten.js"></script>
   <script src="js/seed.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/ai.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
