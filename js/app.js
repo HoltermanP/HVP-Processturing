@@ -388,11 +388,25 @@ function vulFilters() {
 }
 
 /* ----------------------- Overzicht (hiërarchie) -------------------------- */
+// Eén niveau omhoog: van werkpakketten → APD's → projecten.
+function niveauTerug() {
+  if (State.filters.apd) State.filters.apd = '';
+  else if (State.filters.project) State.filters.project = '';
+  else return; // al op het hoogste niveau
+  el('#filterZoek').value = ''; State.filters.zoek = '';
+  render();
+}
+
 function renderOverzicht() {
   const wps = gefilterdeWerkpakketten();
   const niveau = !State.filters.project ? 'projecten' : (!State.filters.apd ? 'apds' : 'wps');
 
-  const kruimels = ['<button data-niveau="root">Projecten</button>'];
+  const kruimels = [];
+  if (niveau !== 'projecten') {
+    const terugLabel = State.filters.apd ? '← Terug naar APD’s' : '← Terug naar projecten';
+    kruimels.push(`<button class="terug-knop" data-niveau="terug">${terugLabel}</button>`);
+  }
+  kruimels.push('<button data-niveau="root">Projecten</button>');
   if (State.filters.project) {
     kruimels.push('<span class="scheiding">▸</span>');
     if (niveau === 'apds') kruimels.push(`<span class="huidig">${htmlEsc(State.filters.project)}</span>`);
@@ -404,6 +418,7 @@ function renderOverzicht() {
   }
   el('#kruimels').innerHTML = kruimels.join(' ');
   els('#kruimels [data-niveau]').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.niveau === 'terug') { niveauTerug(); return; }
     if (b.dataset.niveau === 'root') { State.filters.project = ''; State.filters.apd = ''; }
     if (b.dataset.niveau === 'project') { State.filters.apd = ''; }
     el('#filterZoek').value = ''; State.filters.zoek = ''; render();
@@ -435,6 +450,9 @@ function renderOverzicht() {
   if (niveau === 'projecten') renderProjectenGrid();
   else if (niveau === 'apds') renderApdGrid(State.filters.project);
   else renderWpTabel(wps);
+
+  // Terug-knoppen (kruimelpad + inhoud) activeren
+  els('.terug-knop').forEach((b) => b.addEventListener('click', niveauTerug));
 }
 
 function renderProjectenGrid() {
@@ -495,7 +513,7 @@ function renderApdGrid(project) {
       <button class="apdcard-open">Open werkpakketten →</button>
     </div>`;
   }).join('');
-  el('#hierInhoud').innerHTML = `<div class="niveau-balk">Niveau 2 · APD’s binnen ${htmlEsc(project)}</div><div class="apd-grid">${html}</div>`;
+  el('#hierInhoud').innerHTML = `<div class="niveau-rij"><button class="terug-knop" data-niveau="terug">← Terug naar projecten</button><span class="niveau-balk">Niveau 2 · APD’s binnen ${htmlEsc(project)}</span></div><div class="apd-grid">${html}</div>`;
   els('#hierInhoud .apdcard').forEach((c) => c.addEventListener('click', () => {
     State.filters.apd = c.dataset.apd; render();
   }));
@@ -524,6 +542,7 @@ function renderWpTabel(wps) {
     </tr>`;
   }).join('');
   el('#hierInhoud').innerHTML = `
+    <div class="niveau-rij"><button class="terug-knop" data-niveau="terug">← Terug naar APD’s</button><span class="niveau-balk">Niveau 3 · Werkpakketten${State.filters.apd ? ' in APD ' + htmlEsc(State.filters.apd) : ''}</span></div>
     <div class="card">
       <div class="card-kop"><h2>Werkpakketten<span class="tel">${wps.length}</span></h2><span class="hint">Klik op een rij voor de activiteiten-checklist</span></div>
       <div class="tabel-wrap"><table class="tabel">
@@ -1157,7 +1176,16 @@ async function init() {
   els('.tab').forEach((t) => t.addEventListener('click', () => toonTab(t.dataset.tab)));
   el('#detailClose').addEventListener('click', sluitDetail);
   el('#overlay').addEventListener('click', sluitDetail);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') sluitDetail(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { sluitDetail(); return; }
+    // Backspace = één niveau terug in het Overzicht (mits niet in een invoerveld of drawer)
+    if (e.key === 'Backspace' && !State.actiefWp) {
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+      if (!el('#view-overzicht').classList.contains('actief')) return;
+      if (State.filters.apd || State.filters.project) { e.preventDefault(); niveauTerug(); }
+    }
+  });
 
   el('#filterProject').addEventListener('change', (e) => { State.filters.project = e.target.value; State.filters.apd = ''; render(); });
   el('#filterApd').addEventListener('change', (e) => { State.filters.apd = e.target.value; render(); });
