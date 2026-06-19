@@ -423,6 +423,7 @@ function toast(msg, type = '') {
 /* -------------------------------- Render --------------------------------- */
 function render() {
   vulFilters();
+  renderFilterIndicator();
   renderOverzicht();
   renderPlanning();
   renderTaken();
@@ -455,23 +456,59 @@ function vulFilters() {
   el('#filterRisico').innerHTML = risicoOpts.map(([v, l]) => `<option value="${v}"${v === State.filters.risico ? ' selected' : ''}>${l}</option>`).join('');
 }
 
+const RISICO_LABELS = { kritiek: 'Alleen kritiek', gevaar: 'Alleen risico', geblok: 'Met geblokkeerde activiteiten', opkoers: 'Alleen op koers' };
+// Toont op elk scherm welke filters actief zijn, met losse verwijder-knoppen.
+function renderFilterIndicator() {
+  const f = State.filters;
+  const chips = [];
+  if (f.project) chips.push(['project', `Project: ${f.project}`]);
+  if (f.apd) chips.push(['apd', `APD: ${f.apd}`]);
+  if (f.engineer) chips.push(['engineer', `Engineer: ${f.engineer}`]);
+  if (f.fase) { const fa = FASES.find((x) => x.id === f.fase); chips.push(['fase', `Fase: ${fa ? fa.naam : f.fase}`]); }
+  if (f.risico) chips.push(['risico', RISICO_LABELS[f.risico] || f.risico]);
+  if (f.zoek) chips.push(['zoek', `Zoek: "${f.zoek}"`]);
+  const node = el('#filterIndicator');
+  if (!chips.length) { node.classList.remove('actief'); node.innerHTML = ''; return; }
+  node.classList.add('actief');
+  node.innerHTML = `<span class="fi-label">🔍 Actief filter:</span>` +
+    chips.map(([k, l]) => `<span class="fi-chip" data-k="${k}">${htmlEsc(l)}<button title="Verwijder dit filter" aria-label="Verwijder">×</button></span>`).join('') +
+    `<button class="fi-wis">Alle filters wissen</button>`;
+  els('#filterIndicator .fi-chip').forEach((c) => c.querySelector('button').addEventListener('click', () => {
+    const k = c.dataset.k;
+    State.filters[k] = '';
+    if (k === 'zoek') el('#filterZoek').value = '';
+    if (k === 'project') State.filters.apd = '';
+    render();
+  }));
+  el('#filterIndicator .fi-wis').addEventListener('click', () => {
+    State.filters = { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' };
+    el('#filterZoek').value = ''; render();
+  });
+}
+
 /* ----------------------- Overzicht (hiërarchie) -------------------------- */
-// Eén niveau omhoog: van werkpakketten → APD's → projecten.
+// Eén stap terug: eerst inhoudsfilters wissen, daarna door de hiërarchie omhoog.
 function niveauTerug() {
-  if (State.filters.apd) State.filters.apd = '';
-  else if (State.filters.project) State.filters.project = '';
-  else return; // al op het hoogste niveau
-  el('#filterZoek').value = ''; State.filters.zoek = '';
+  const f = State.filters;
+  if (f.risico || f.engineer || f.fase || f.zoek) {
+    f.risico = ''; f.engineer = ''; f.fase = ''; f.zoek = ''; el('#filterZoek').value = '';
+    render(); return;
+  }
+  if (f.apd) f.apd = '';
+  else if (f.project) f.project = '';
+  else return;
   render();
 }
 
 function renderOverzicht() {
   const wps = gefilterdeWerkpakketten();
-  const niveau = !State.filters.project ? 'projecten' : (!State.filters.apd ? 'apds' : 'wps');
+  const f = State.filters;
+  const contentFilter = !!(f.risico || f.engineer || f.fase || f.zoek);
+  const niveau = contentFilter ? 'wps' : (!f.project ? 'projecten' : (!f.apd ? 'apds' : 'wps'));
 
   const kruimels = [];
-  if (niveau !== 'projecten') {
-    const terugLabel = State.filters.apd ? '← Terug naar APD’s' : '← Terug naar projecten';
+  if (niveau !== 'projecten' || contentFilter) {
+    const terugLabel = contentFilter ? '← Filter wissen' : (f.apd ? '← Terug naar APD’s' : '← Terug naar projecten');
     kruimels.push(`<button class="terug-knop" data-niveau="terug">${terugLabel}</button>`);
   }
   kruimels.push('<button data-niveau="root">Projecten</button>');
@@ -623,8 +660,12 @@ function renderWpTabel(wps) {
       <td>${risico}</td>
     </tr>`;
   }).join('');
+  const f = State.filters;
+  const contentFilter = !!(f.risico || f.engineer || f.fase || f.zoek);
+  const terugLabel = contentFilter ? '← Filter wissen' : '← Terug naar APD’s';
+  const balkTekst = f.apd ? `Niveau 3 · Werkpakketten in APD ${htmlEsc(f.apd)}` : 'Gefilterde werkpakketten';
   el('#hierInhoud').innerHTML = `
-    <div class="niveau-rij"><button class="terug-knop" data-niveau="terug">← Terug naar APD’s</button><span class="niveau-balk">Niveau 3 · Werkpakketten${State.filters.apd ? ' in APD ' + htmlEsc(State.filters.apd) : ''}</span></div>
+    <div class="niveau-rij"><button class="terug-knop" data-niveau="terug">${terugLabel}</button><span class="niveau-balk">${balkTekst}</span></div>
     <div class="card">
       <div class="card-kop"><h2>Werkpakketten<span class="tel">${wps.length}</span></h2><span class="hint">Klik op een rij voor de activiteiten-checklist</span></div>
       <div class="tabel-wrap"><table class="tabel">
@@ -921,11 +962,11 @@ function renderDashboard() {
   const tiles = [
     { val: s.aantal, label: 'Werkpakketten', cls: '', actie: 'overzicht' },
     { val: `${(s.meters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}<small> km</small>`, label: 'Nieuw tracé', cls: 'kpi-paars', actie: 'overzicht' },
-    { val: `${s.pct}<small>%</small>`, label: 'Gem. voortgang', cls: 'kpi-groen', actie: 'donut', extra: trend },
-    { val: `${actGereed}<small>/${actTotaal}</small>`, label: 'Activiteiten gereed', cls: '', actie: 'donut' },
+    { val: `${s.pct}<small>%</small>`, label: 'Gem. voortgang', cls: 'kpi-groen', actie: 'overzicht', extra: trend },
+    { val: `${actGereed}<small>/${actTotaal}</small>`, label: 'Activiteiten gereed', cls: '', actie: 'overzicht' },
     { val: s.kritiek, label: 'Kritieke werkpakketten', cls: 'kpi-rood', actie: 'kritiek' },
-    { val: s.gevaar, label: 'Werkpakketten met risico', cls: 'kpi-amber', actie: 'kritiek' },
-    { val: telling.geblokkeerd, label: 'Geblokkeerde activiteiten', cls: 'kpi-rood', actie: 'kritiek' },
+    { val: s.gevaar, label: 'Werkpakketten met risico', cls: 'kpi-amber', actie: 'gevaar' },
+    { val: telling.geblokkeerd, label: 'Geblokkeerde activiteiten', cls: 'kpi-rood', actie: 'geblok' },
     { val: mp30, label: 'Mijlpalen ≤ 30 dagen', cls: '', actie: 'mijlpalen' },
   ];
   el('#dashKpis').innerHTML = tiles.map((t) =>
@@ -1010,21 +1051,19 @@ function renderDashboard() {
 }
 
 /* ----------------------- Dashboard: interactie & visuals ----------------- */
+// Klik op een dashboard-tegel → navigeer naar het bijbehorende, gefilterde scherm.
 function kpiActie(actie) {
-  if (actie === 'overzicht') {
-    State.filters = { project: State.dashScope === 'portfolio' ? '' : State.dashScope, apd: '', engineer: '', fase: '', zoek: '' };
-    el('#filterZoek').value = ''; render(); toonTab('overzicht');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    return;
-  }
-  const map = { donut: '#rapStatusDonut', kritiek: '#rapKritiek', mijlpalen: '#rapKomend' };
-  if (map[actie]) scrollNaarKaart(map[actie]);
-}
-function scrollNaarKaart(innerSel) {
-  const card = el(innerSel) && el(innerSel).closest('.card');
-  if (!card) return;
-  card.classList.remove('kaart-flits'); void card.offsetWidth; card.classList.add('kaart-flits');
-  if (typeof card.scrollIntoView === 'function') card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const projectScope = State.dashScope === 'portfolio' ? '' : State.dashScope;
+  State.filters = { project: projectScope, apd: '', engineer: '', fase: '', risico: '', zoek: '' };
+  el('#filterZoek').value = '';
+  let tab = 'overzicht';
+  if (actie === 'kritiek') State.filters.risico = 'kritiek';
+  else if (actie === 'gevaar') State.filters.risico = 'gevaar';
+  else if (actie === 'geblok') { State.takenFilter = 'geblok'; tab = 'taken'; }
+  else if (actie === 'mijlpalen') { State.horizon = '30'; tab = 'taken'; }
+  render();
+  toonTab(tab);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Voortgangstrend uit momentopnames (SVG-lijngrafiek).
