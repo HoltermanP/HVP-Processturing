@@ -509,6 +509,52 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 /* groepskoppen in tabel (APD) */
 .groep-rij td{background:linear-gradient(90deg,var(--accent-soft),transparent);font-weight:700;font-size:12px;color:var(--accent-dark);padding:9px 14px;text-transform:uppercase;letter-spacing:.4px}
 
+/* ============================ Registers (vergunningen/risico) ============================ */
+.reg-badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.reg-score{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;padding:0 6px;border-radius:7px;color:#fff;font-weight:800;font-size:12px}
+.reg-acties{text-align:right;white-space:nowrap}
+.mini-knop{background:var(--panel-2);border:1px solid var(--line);color:var(--accent);font-weight:600;font-size:11.5px;padding:5px 10px;border-radius:8px;cursor:pointer;transition:.12s}
+.mini-knop:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Risicomatrix */
+.risk-matrix{display:grid;grid-template-columns:26px repeat(5,1fr);gap:5px}
+.rm-cel{aspect-ratio:1.4;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#0f172a;cursor:pointer;transition:.12s;border:2px solid transparent}
+.rm-cel:hover{transform:scale(1.06);box-shadow:var(--shadow)}
+.rm-cel.actief{border-color:var(--ink);box-shadow:0 0 0 2px rgba(15,23,42,.25)}
+.rm-as{display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--sub);font-weight:700}
+.rm-hoek{}
+.rm-labels{display:flex;justify-content:space-between;margin-top:8px;font-size:10.5px;color:var(--sub);font-weight:600}
+
+/* Register-blok in detailpaneel */
+.reg-blok{margin:16px 0;padding:14px 16px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px}
+.reg-kop{display:flex;justify-content:space-between;align-items:center}
+.reg-kop h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--sub)}
+.reg-mini-lijst{list-style:none;margin:8px 0 0;padding:0}
+.reg-mini-lijst li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-2);font-size:12.5px;cursor:pointer}
+.reg-mini-lijst li:last-child{border-bottom:0}
+.reg-mini-lijst li:hover{color:var(--accent)}
+.reg-mini-lijst .leeg-mini{color:var(--faint);cursor:default;justify-content:flex-start}
+.reg-mini-lijst .leeg-mini:hover{color:var(--faint)}
+
+/* ============================ Modal ============================ */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);opacity:0;pointer-events:none;transition:.2s;z-index:60;backdrop-filter:blur(2px)}
+.modal-overlay.show{opacity:1;pointer-events:auto}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-46%);width:min(640px,94vw);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);z-index:70;opacity:0;pointer-events:none;transition:.22s}
+.modal.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
+.modal-kop{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;border-radius:16px 16px 0 0}
+.modal-kop h3{font-size:17px}
+.modal-body{padding:20px 22px}
+.modal-veld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.modal-veld label{font-size:12px;font-weight:650;color:var(--ink-2)}
+.modal-veld input,.modal-veld select,.modal-veld textarea{padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;background:#fff;color:var(--ink)}
+.modal-veld input:focus,.modal-veld select:focus,.modal-veld textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+.modal-veld textarea{resize:vertical}
+.modal-rij{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:540px){.modal-rij{grid-template-columns:1fr}}
+.modal-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:4px;padding-top:16px;border-top:1px solid var(--line)}
+.modal-foot .verwijder-knop{margin-right:auto;background:#fff;border:1px solid #fecaca;color:#dc2626;padding:9px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+.modal-foot .verwijder-knop:hover{background:#fef2f2}
+
 /* ============================ Print ============================ */
 @media print{
   .topbar,.filterbalk,.section-kop .seg-control,.rapport-config,.ai-status,.knoppenrij{display:none!important}

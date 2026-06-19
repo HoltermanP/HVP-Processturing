@@ -52,10 +52,14 @@ const State = {
   doorlooptijden: {},
   snapshots: [],
   instellingen: {},
+  vergunningen: [],
+  risicos: [],
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   actiefWp: null,
   horizon: '30',
   takenFilter: 'alle',
+  vgFilter: 'alle',
+  riskCel: null,
   dashScope: 'portfolio',
 
   async laad() {
@@ -64,6 +68,8 @@ const State = {
     this.doorlooptijden = staat.doorlooptijden || {};
     this.snapshots = staat.snapshots || [];
     this.instellingen = staat.instellingen || {};
+    this.vergunningen = staat.vergunningen || [];
+    this.risicos = staat.risicos || [];
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     if (this.instellingen.peildatum) {
@@ -83,6 +89,8 @@ const State = {
       doorlooptijden: this.doorlooptijden,
       snapshots: this.snapshots,
       instellingen: this.instellingen,
+      vergunningen: this.vergunningen,
+      risicos: this.risicos,
     });
   },
   wpVoortgang(wpId) {
@@ -418,6 +426,8 @@ function render() {
   renderOverzicht();
   renderPlanning();
   renderTaken();
+  renderVergunningen();
+  renderRisicos();
   renderDashboard();
   renderRapportenControls();
   renderActiviteiten();
@@ -783,6 +793,8 @@ function renderDetail(wpId) {
   el('#detailFaseInfo').innerHTML = hf.fase
     ? `Huidige fase volgens planning: <strong style="color:${hf.fase.kleur}">${htmlEsc(hf.fase.naam)}</strong> <span class="badge ${hf.status==='afgerond'?'done':hf.status==='gepland'?'plan':'live'}">${hf.status}</span> · activiteit-voortgang ${av.klaar}/${av.totaal} (${av.pct}%)`
     : 'Geen fase-informatie beschikbaar.';
+  el('#detailRegisters').innerHTML = detailRegistersHtml(w);
+  bindDetailRegisters(w);
   el('#detailFasen').innerHTML = FASES.map((f) => {
     const fv = faseVoortgang(w, f);
     const open = (hf.fase && hf.fase.id === f.id) ? ' open' : '';
@@ -1209,6 +1221,7 @@ function bouwRapportData(scope, van, tot, label) {
     voortgangsontwikkeling: voortgangsDelta,
     terugblik: { mijlpalenInPeriode: mpPeriode },
     vooruitblik: { naderendeMijlpalen: mpKomend.slice(0, 25), kritiekeTaken: kritiek, risicoTaken: gevaar },
+    registers: registerRapportData(scope),
     perProject,
   };
 }
@@ -1223,8 +1236,8 @@ Verplichte structuur:
 ## Samenvatting   (3-5 kernzinnen voor het management)
 ## Terugblik afgelopen periode   (mijlpalen die gepland stonden en hun status; voortgangsontwikkeling indien beschikbaar)
 ## Voortgang & KPI's   (kerncijfers; gebruik een korte Markdown-tabel)
-## Risico's & kritieke punten   (kritieke en risicovolle werkpakketten/taken, met de reden)
-## Vooruitblik komende periode   (naderende mijlpalen en wat er concreet gedaan moet worden)
+## Risico's & kritieke punten   (kritieke/risicovolle werkpakketten en taken; betrek het risico-register (top-risico's met score) en vergunningen/ZRO die over de besluitdatum zijn)
+## Vooruitblik komende periode   (naderende mijlpalen, openstaande vergunningen/ZRO en wat er concreet gedaan moet worden)
 ## Aanbevelingen   (3-6 puntsgewijze, actiegerichte aanbevelingen)
 
 Houd het bondig maar volledig; vermijd holle frasen en herhaling.`;
@@ -1401,6 +1414,7 @@ async function init() {
   DB.onStatus((s) => updateDbStatus(s));
   await State.laad();
   if (State._moetBewaren) { State.bewaar(); State._moetBewaren = false; }
+  registersInit();
 
   els('.tab').forEach((t) => t.addEventListener('click', () => toonTab(t.dataset.tab)));
   el('#detailClose').addEventListener('click', sluitDetail);
@@ -1457,7 +1471,7 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
@@ -1470,6 +1484,8 @@ async function init() {
         if (data.voortgang) State.voortgang = data.voortgang;
         if (data.doorlooptijden) State.doorlooptijden = data.doorlooptijden;
         if (data.snapshots) State.snapshots = data.snapshots;
+        if (data.vergunningen) State.vergunningen = data.vergunningen;
+        if (data.risicos) State.risicos = data.risicos;
         State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
         toast('Werkbestand hersteld', 'ok'); toonTab('overzicht');
@@ -1491,7 +1507,7 @@ async function init() {
     localStorage.removeItem(CACHE_KEY);
     await DB.wisNeon();
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
-    State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = [];
+    State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = []; State.vergunningen = []; State.risicos = [];
     State.bewaar(); render(); toonTab('overzicht'); toast('Alles gewist', 'ok');
   });
 

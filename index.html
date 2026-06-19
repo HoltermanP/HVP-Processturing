@@ -21,6 +21,8 @@
         <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
         <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
         <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
+        <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
+        <button class="tab" data-tab="risico"><span class="ico">⚠</span>Risico's</button>
         <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
         <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
         <button class="tab" data-tab="activiteiten"><span class="ico">≣</span>Activiteiten</button>
@@ -81,6 +83,35 @@
         <div id="takenStats" class="taken-stats"></div>
       </div>
       <div id="takenLijst"></div>
+    </section>
+
+    <!-- ================= VERGUNNINGEN & ZRO ================= -->
+    <section id="view-vergunningen" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Vergunningen &amp; ZRO</h2>
+          <p>Vergunningen, meldingen, toestemmingen en zakelijk recht (ZRO) per werkpakket — met naderende en verstreken besluitdata. Filter met de balk bovenaan of klik op een tegel.</p>
+        </div>
+        <button class="primair" id="vgToevoegen"><span class="ico">＋</span> Toevoegen</button>
+      </div>
+      <div class="card"><div id="vgKpis" class="taken-stats"></div></div>
+      <div id="vgInhoud"></div>
+    </section>
+
+    <!-- ================= RISICO-REGISTER ================= -->
+    <section id="view-risico" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Risico-register</h2>
+          <p>Risico's per project/werkpakket met kans, impact, beheersmaatregel en eigenaar. Klik een cel in de matrix om te filteren.</p>
+        </div>
+        <button class="primair" id="riskToevoegen"><span class="ico">＋</span> Toevoegen</button>
+      </div>
+      <div class="grid-2">
+        <div class="card"><div class="card-kop"><h2>Risicomatrix</h2><span class="hint">kans × impact · klik om te filteren</span></div><div id="riskMatrix"></div></div>
+        <div class="card"><div class="card-kop"><h2>Kerncijfers</h2></div><div id="riskKpis" class="taken-stats"></div></div>
+      </div>
+      <div id="riskInhoud"></div>
     </section>
 
     <!-- ================= DASHBOARD / RAPPORTAGE ================= -->
@@ -279,6 +310,7 @@
       <button id="detailClose" class="close">✕</button>
     </div>
     <div id="detailFaseInfo" class="fase-info"></div>
+    <div id="detailRegisters"></div>
     <div class="drawer-grid">
       <div>
         <h3>Mijlpalen</h3>
@@ -293,10 +325,18 @@
 
   <div id="toast" class="toast"></div>
 
+  <!-- MODAL (toevoegen/bewerken registers) -->
+  <div id="modalOverlay" class="modal-overlay"></div>
+  <div id="modal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-kop"><h3 id="modalTitel"></h3><button class="close" id="modalClose">✕</button></div>
+    <div id="modalBody" class="modal-body"></div>
+  </div>
+
   <script src="js/activiteiten.js"></script>
   <script src="js/seed.js"></script>
   <script src="js/db.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/registers.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
