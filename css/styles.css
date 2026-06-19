@@ -145,6 +145,23 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .kpi-label{color:var(--sub);font-size:12px;margin-top:5px;font-weight:550}
 .kpi-trend{font-size:11px;margin-top:6px;font-weight:600;display:inline-flex;gap:4px;align-items:center}
 .kpi-trend.up{color:var(--groen)} .kpi-trend.down{color:var(--rood)} .kpi-trend.flat{color:var(--sub)}
+.kpi.klikbaar{cursor:pointer;transition:.15s}
+.kpi.klikbaar:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--accent)}
+.kpi.klikbaar:focus-visible{outline:none;box-shadow:var(--ring)}
+.kpi-pijl{position:absolute;top:12px;right:14px;color:var(--faint);font-size:18px;font-weight:700;opacity:0;transition:.15s}
+.kpi.klikbaar:hover .kpi-pijl{opacity:1;color:var(--accent);transform:translateX(2px)}
+
+/* Kaart-flits bij scroll-naar */
+@keyframes kaartflits{0%{box-shadow:0 0 0 3px rgba(37,99,235,.45)}100%{box-shadow:var(--shadow)}}
+.kaart-flits{animation:kaartflits 1.1s ease}
+
+/* Lege-visual placeholder */
+.leeg-visual{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:34px 16px;color:var(--sub);font-size:13px;min-height:150px}
+.leeg-visual .lv-ico{font-size:26px;opacity:.7}
+
+/* Tijdlijn-punten */
+.tl-punt circle{transition:.12s}
+.tl-punt:hover circle{r:8;filter:drop-shadow(0 2px 4px rgba(15,23,42,.25))}
 
 /* ============================ Fasebalk ============================ */
 .fasebalk{display:flex;height:28px;border-radius:9px;overflow:hidden;background:var(--line-2);box-shadow:inset 0 0 0 1px var(--line)}
@@ -308,6 +325,16 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .rp-naam{flex:0 0 170px;font-size:13px;font-weight:600}
 .rp-pct{flex:0 0 46px;text-align:right;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
 
+/* Voortgang per project/APD — gestapelde statusbalk */
+.vp-rij{padding:10px 0;border-bottom:1px solid var(--line-2)}
+.vp-rij:last-child{border-bottom:0}
+.vp-kop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+.vp-naam{font-size:13px;font-weight:600}
+.vp-pct{font-size:14px;font-weight:750;color:var(--ink);font-variant-numeric:tabular-nums}
+.statbar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--line-2);box-shadow:inset 0 0 0 1px var(--line)}
+.statbar .stseg{height:100%;transition:.3s}
+.vp-meta{font-size:11.5px;color:var(--sub);margin-top:6px}
+
 /* ============================ Doorlooptijden ============================ */
 .dt-fase{margin-bottom:24px}
 .dt-fase h3{font-size:14px;border-left:4px solid var(--c);padding-left:11px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
@@ -324,6 +351,20 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .tstat b{font-size:24px;font-weight:750;display:block;line-height:1.1}
 .tstat span{font-size:12px;color:var(--sub);font-weight:550}
 .tstat.rood b{color:var(--rood)} .tstat.amber b{color:var(--amber)} .tstat.blauw b{color:var(--accent)} .tstat.groen b{color:var(--groen)}
+.tstat.klikbaar{cursor:pointer;transition:.14s;position:relative}
+.tstat.klikbaar:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow)}
+.tstat.klikbaar:focus-visible{outline:none;box-shadow:var(--ring)}
+.tstat.actief{border-color:var(--accent);background:#fff;box-shadow:0 0 0 2px var(--accent) inset}
+.tstat.actief::after{content:"✓ actief";position:absolute;top:8px;right:10px;font-size:9px;font-weight:700;color:var(--accent)}
+
+/* Actieve KPI-tegel (risicofilter) */
+.kpi-actief{box-shadow:0 0 0 2px var(--accent) inset !important;border-color:var(--accent)}
+.kpi-actief .kpi-pijl{opacity:1;color:var(--accent)}
+
+/* Taken-filterbalk */
+.taken-filterbalk{display:flex;align-items:center;gap:12px;margin-bottom:14px;font-size:13px;color:var(--sub);background:var(--accent-soft);padding:10px 14px;border-radius:11px}
+.taken-filterbalk strong{color:var(--accent-dark)}
+.taken-filterbalk .terug-knop{margin-left:auto;padding:6px 12px;font-size:12px}
 
 .taakgroep{margin-bottom:8px}
 .taakgroep-kop{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px;margin:18px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--line)}

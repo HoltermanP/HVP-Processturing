@@ -36,6 +36,7 @@
     <select id="filterApd"></select>
     <select id="filterEngineer"></select>
     <select id="filterFase"></select>
+    <select id="filterRisico"></select>
     <button id="filterReset" class="ghost">Reset</button>
   </div>
 
@@ -93,6 +94,17 @@
       </div>
 
       <div id="dashKpis" class="kpis"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-kop"><h2>Voortgangstrend</h2><span class="hint">o.b.v. vastgelegde momentopnames</span></div>
+          <div id="dashTrend"></div>
+        </div>
+        <div class="card">
+          <div class="card-kop"><h2>Mijlpalen per week</h2><span class="hint">komende 90 dagen · gekleurd per fase</span></div>
+          <div id="dashTijdlijn"></div>
+        </div>
+      </div>
 
       <div class="grid-2">
         <div class="card">
@@ -216,6 +228,7 @@
             <button id="btnExport" class="primair">Exporteer (JSON)</button>
             <label class="filebtn">Herstel<input id="jsonFile" type="file" accept=".json,application/json" hidden></label>
             <button id="btnSeed" class="ghost">Voorbeelddata</button>
+            <button id="btnDemo" class="ghost">Realistische voortgang genereren</button>
             <button id="btnWis" class="gevaar">Alles wissen</button>
           </div>
         </div>
