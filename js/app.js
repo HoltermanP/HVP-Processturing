@@ -37,6 +37,7 @@ const State = {
   werkpakketten: [],   // lijst van WP-objecten
   voortgang: {},       // wpId -> { activiteitcode -> {status, notitie} }
   doorlooptijden: {},  // activiteitcode -> werkdagen (override op standaard)
+  bron: 'seed',        // 'seed' (voorbeelddata) of 'import' (eigen CSV/JSON)
   filters: { project: '', engineer: '', fase: '', zoek: '' },
   actiefWp: null,
 
@@ -45,10 +46,13 @@ const State = {
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
       this.voortgang = raw.voortgang || {};
       this.doorlooptijden = raw.doorlooptijden || {};
-      this.werkpakketten = (raw.werkpakketten && raw.werkpakketten.length)
+      this.bron = raw.bron || 'seed';
+      // Voorbeelddata altijd verversen vanuit seed.js; eigen import behouden.
+      this.werkpakketten = (this.bron === 'import' && raw.werkpakketten && raw.werkpakketten.length)
         ? raw.werkpakketten
         : (window.SEED_WERKPAKKETTEN || []);
     } catch (e) {
+      this.bron = 'seed';
       this.werkpakketten = window.SEED_WERKPAKKETTEN || [];
       this.voortgang = {};
       this.doorlooptijden = {};
@@ -59,6 +63,7 @@ const State = {
       werkpakketten: this.werkpakketten,
       voortgang: this.voortgang,
       doorlooptijden: this.doorlooptijden,
+      bron: this.bron,
     }));
   },
   wpVoortgang(wpId) {
@@ -756,7 +761,7 @@ function init() {
     reader.onload = () => {
       try {
         const wps = importeerCsv(reader.result);
-        State.werkpakketten = wps; State.bewaar(); render();
+        State.werkpakketten = wps; State.bron = 'import'; State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">${wps.length} werkpakketten geïmporteerd uit "${htmlEsc(file.name)}".</span>`;
         toonTab('projecten');
       } catch (err) {
@@ -781,7 +786,7 @@ function init() {
         const data = JSON.parse(reader.result);
         if (data.werkpakketten) State.werkpakketten = data.werkpakketten;
         if (data.voortgang) State.voortgang = data.voortgang;
-        State.bewaar(); render();
+        State.bron = 'import'; State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
         toonTab('projecten');
       } catch (err) {
@@ -794,13 +799,13 @@ function init() {
   el('#btnSeed').addEventListener('click', () => {
     if (!confirm('Voorbeelddata (Spannenburg + Joure) laden? Huidige werkpakketten worden vervangen. Voortgang blijft bewaard.')) return;
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
-    State.bewaar(); render(); toonTab('projecten');
+    State.bron = 'seed'; State.bewaar(); render(); toonTab('projecten');
   });
   el('#btnWis').addEventListener('click', () => {
     if (!confirm('ALLE data en voortgang wissen en opnieuw beginnen met voorbeelddata?')) return;
     localStorage.removeItem(STORAGE_KEY);
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
-    State.voortgang = {}; render(); toonTab('projecten');
+    State.bron = 'seed'; State.voortgang = {}; render(); toonTab('projecten');
   });
 
   el('#peildatum').textContent = fmtDatum(VANDAAG);
