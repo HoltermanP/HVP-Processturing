@@ -21,7 +21,7 @@ const FASES = [
       { code: '0.02', naam: 'Stukken controleren op compleetheid', omschrijving: 'Binnen 5 werkdagen vult HVP het intakeformulier in waarop wordt aangegeven of alle stukken volledig en ontvangen zijn.' },
       { code: '0.03', naam: 'Inhoudelijk beoordelen TOF (techniek, omgeving, financieel)', omschrijving: 'Analyseren van de TOF-studie: vaststellen of informatie correct/actueel/volledig is, of uitgangspunten realiseerbaar zijn en het identificeren van risico’s, afwijkingen en restpunten.' },
       { code: '0.04', naam: 'Warme overdracht', omschrijving: 'Ca. 2 weken na ontvangst vindt een warme overdracht met Liander plaats met vragen en toelichting op de ontvangen documenten.' },
-      { code: '0.05', naam: 'Acceptatie IV/TOF', omschrijving: 'Formeel accepteren van de IV- en TOV-documenten door ondertekening van een ApD-bouwteamdocument. Pas daarna start het project en kan de VO-fase ingeleid worden.' },
+      { code: '0.05', naam: 'Acceptatie IV/TOF', omschrijving: 'Formeel accepteren van de IV- en TOF-documenten door ondertekening van een ApD-bouwteamdocument. Pas daarna start het project en kan de VO-fase ingeleid worden.' },
       { code: '0.06', naam: 'Inrichten projectomgeving', omschrijving: 'Inrichten van de systemen (Relatics, Clockwise, M-files, ACC) voor het project.' },
       { code: '0.07', naam: 'Opstellen startnota', omschrijving: 'Startnota legt uitgangspunten, scope, planning, werkpakketten en organisatorische afspraken vast. Sluit de analysefase af en dient als plan van aanpak voor de VO-fase.' },
       { code: '0.08', naam: 'Beoordeling startnota Liander', omschrijving: 'Liander beoordeelt de startnota binnen 2 weken. HVP biedt de startnota aan binnen VISI.' },
