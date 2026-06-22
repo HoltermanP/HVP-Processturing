@@ -8,11 +8,15 @@
 
 const STATUSSEN = {
   open:        { label: 'Niet gestart', kleur: '#94a3b8' },
-  bezig:       { label: 'Bezig',        kleur: '#0ea5e9' },
+  bezig:       { label: 'Lopend',       kleur: '#0ea5e9' },
+  vertraagd:   { label: 'Vertraagd',    kleur: '#f59e0b' },
+  issue:       { label: 'Issue',        kleur: '#dc2626' },
+  geblokkeerd: { label: 'Geblokkeerd',  kleur: '#7c3aed' },
   gereed:      { label: 'Gereed',       kleur: '#10b981' },
-  geblokkeerd: { label: 'Geblokkeerd',  kleur: '#ef4444' },
   nvt:         { label: 'N.v.t.',       kleur: '#cbd5e1' },
 };
+// Probleemstatussen (tellen als risico/blokkade in signalen en dashboard).
+const PROBLEEM_STATUS = ['geblokkeerd', 'issue'];
 
 const STANDAARD_PEILDATUM = '2026-06-19';
 let VANDAAG = new Date(STANDAARD_PEILDATUM);
@@ -70,16 +74,12 @@ const State = {
     this.instellingen = staat.instellingen || {};
     this.vergunningen = staat.vergunningen || [];
     this.risicos = staat.risicos || [];
-    const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
-    this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
+    this.werkpakketten = (staat.werkpakketten && staat.werkpakketten.length)
+      ? staat.werkpakketten
+      : (window.SEED_WERKPAKKETTEN || []);
     if (this.instellingen.peildatum) {
       const d = parseDatum(this.instellingen.peildatum);
       if (d) VANDAAG = d;
-    }
-    // Eerste start met voorbeelddata zonder voortgang → realistische voortgang opwekken.
-    if (verseSeed && Object.keys(this.voortgang).length === 0 && this.werkpakketten.length) {
-      this.voortgang = genereerDemoVoortgang(this.werkpakketten);
-      this._moetBewaren = true;
     }
   },
   bewaar() {
@@ -125,16 +125,19 @@ function huidigeFase(wp) {
 
 function activiteitVoortgang(wp) {
   const v = State.voortgang[wp.id] || {};
-  let totaal = 0, klaar = 0, geblokkeerd = 0, bezig = 0;
+  let totaal = 0, klaar = 0, geblokkeerd = 0, bezig = 0, vertraagd = 0, issue = 0;
   FASES.forEach((f) => f.activiteiten.forEach((a) => {
     const st = (v[a.code] && v[a.code].status) || 'open';
     if (st === 'nvt') return;
     totaal++;
     if (st === 'gereed') klaar++;
     if (st === 'geblokkeerd') geblokkeerd++;
+    if (st === 'issue') issue++;
+    if (st === 'vertraagd') vertraagd++;
     if (st === 'bezig') bezig++;
   }));
-  return { totaal, klaar, geblokkeerd, bezig, pct: totaal ? Math.round((klaar / totaal) * 100) : 0 };
+  // 'geblokkeerd' = blokkades én issues (probleemactiviteiten)
+  return { totaal, klaar, geblokkeerd: geblokkeerd + issue, geblok: geblokkeerd, issue, vertraagd, bezig, pct: totaal ? Math.round((klaar / totaal) * 100) : 0 };
 }
 
 function faseVoortgang(wp, fase) {
@@ -198,8 +201,10 @@ function signalen(wp) {
   const sig = [];
   const v = State.voortgang[wp.id] || {};
   const hf = huidigeFase(wp);
-  const geblok = Object.entries(v).filter(([, o]) => o.status === 'geblokkeerd').map(([c]) => c);
-  if (geblok.length) sig.push({ type: 'geblokkeerd', ernst: 3, tekst: `${geblok.length} geblokkeerde activiteit(en)`, codes: geblok });
+  const geblok = Object.entries(v).filter(([, o]) => PROBLEEM_STATUS.includes(o.status)).map(([c]) => c);
+  if (geblok.length) sig.push({ type: 'geblokkeerd', ernst: 3, tekst: `${geblok.length} geblokkeerde activiteit(en) / issue(s)`, codes: geblok });
+  const vertr = Object.entries(v).filter(([, o]) => o.status === 'vertraagd').map(([c]) => c);
+  if (vertr.length) sig.push({ type: 'vertraagd', ernst: 2, tekst: `${vertr.length} vertraagde activiteit(en)`, codes: vertr });
   FASES.forEach((f) => {
     const eind = parseDatum(wp.mijlpalen[f.eindMijlpaal]);
     if (!eind) return;
@@ -312,7 +317,8 @@ function komendeTaken(wps, tot) {
         const latestStart = minWerkdagen(faseEind, dt);
         const speling = restTotEind - dt;
         let ernst = 1; const flags = [];
-        if (st === 'geblokkeerd') { ernst = 3; flags.push('geblokkeerd'); }
+        if (st === 'geblokkeerd' || st === 'issue') { ernst = 3; flags.push(st); }
+        else if (st === 'vertraagd') { ernst = Math.max(ernst, 2); flags.push('vertraagd'); }
         if (overtijdFase) { ernst = 3; if (!flags.includes('kritiek')) flags.push('kritiek'); }
         else if (dt > restTotEind) { ernst = Math.max(ernst, 3); if (!flags.includes('kritiek')) flags.push('kritiek'); }
         else if (VANDAAG > latestStart) { ernst = Math.max(ernst, 2); flags.push('gevaar'); }
@@ -360,50 +366,6 @@ function snapshotVoor(datum) {
   let best = null;
   State.snapshots.forEach((s) => { if (s.datum <= datum && (!best || s.datum > best.datum)) best = s; });
   return best;
-}
-
-/* ------------- Realistische demo-voortgang (afgeleid van planning) ------- */
-function _hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; }
-function _rng(seed) {
-  return function () { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
-// Genereert plausibele statussen: eerdere fasen gereed, huidige fase deels af
-// (mix bezig/geblokkeerd/open), toekomstige fasen open — met variatie per WP.
-function genereerVoortgangVoor(wp) {
-  const r = _rng(_hash(wp.id));
-  const out = {};
-  const hf = huidigeFase(wp);
-  const afgerond = hf.status === 'afgerond';
-  const fIdx = hf.fase ? FASES.findIndex((f) => f.id === hf.fase.id) : -1;
-  const bias = r(); // sommige WP's lopen voor, sommige achter
-  FASES.forEach((f, i) => {
-    let fractie;
-    if (afgerond) fractie = 1;
-    else if (fIdx < 0) fractie = r() < 0.4 ? 0.2 : 0;
-    else if (i < fIdx) fractie = 1;
-    else if (i > fIdx) fractie = 0;
-    else {
-      const sch = faseSchema(wp, f);
-      let elapsed = 0.5;
-      if (sch) { const tot = werkdagenTussen(sch.start, sch.eind) || 1; elapsed = Math.min(1, Math.max(0, werkdagenTussen(sch.start, VANDAAG) / tot)); }
-      fractie = Math.min(1, Math.max(0, elapsed * (0.65 + bias * 0.6)));
-    }
-    const acts = f.activiteiten;
-    const klaar = Math.round(acts.length * fractie);
-    acts.forEach((a, j) => {
-      let st = 'open';
-      if (j < klaar) st = r() < 0.06 ? 'nvt' : 'gereed';
-      else if (i === fIdx && !afgerond && j === klaar) { const x = r(); st = x < 0.65 ? 'bezig' : (x < 0.82 ? 'geblokkeerd' : 'open'); }
-      else if (i === fIdx && !afgerond && j === klaar + 1 && r() < 0.45) st = 'bezig';
-      if (st !== 'open') out[a.code] = { status: st };
-    });
-  });
-  return out;
-}
-function genereerDemoVoortgang(wps) {
-  const out = {};
-  wps.forEach((w) => { out[w.id] = genereerVoortgangVoor(w); });
-  return out;
 }
 
 /* ------------------------------- Helpers --------------------------------- */
@@ -726,7 +688,7 @@ function renderTaken() {
   const kritiek = taken.filter((t) => t.ernst >= 3);
   const gevaar = taken.filter((t) => t.ernst === 2);
   const gepland = taken.filter((t) => t.ernst === 1);
-  const geblok = taken.filter((t) => t.status === 'geblokkeerd');
+  const geblok = taken.filter((t) => t.status === 'geblokkeerd' || t.status === 'issue');
   let mp = 0;
   wps.forEach((w) => MIJLPALEN.forEach((m) => { const d = parseDatum(w.mijlpalen[m.key]); if (d && d >= van && d <= tot) mp++; }));
 
@@ -905,20 +867,22 @@ function renderDoorlooptijden() {
 }
 
 /* ---------------------------- Dashboard / KPI ---------------------------- */
+function leegTelling() { const t = {}; Object.keys(STATUSSEN).forEach((k) => { t[k] = 0; }); return t; }
 function statusMix(set) {
-  const t = { open: 0, bezig: 0, gereed: 0, geblokkeerd: 0, nvt: 0 };
+  const t = leegTelling();
   set.forEach((w) => { const v = State.voortgang[w.id] || {}; FASES.forEach((f) => f.activiteiten.forEach((a) => { t[(v[a.code] && v[a.code].status) || 'open']++; })); });
   return t;
 }
 function voortgangRijHtml(naam, set) {
   const t = statusMix(set);
-  const tel = t.open + t.bezig + t.gereed + t.geblokkeerd || 1;
+  const tel = (t.open + t.bezig + t.vertraagd + t.issue + t.gereed + t.geblokkeerd) || 1;
   const pct = Math.round((t.gereed / tel) * 100);
   const seg = (k) => t[k] ? `<span class="stseg" style="width:${(t[k] / tel * 100).toFixed(1)}%;background:${STATUSSEN[k].kleur}" title="${STATUSSEN[k].label}: ${t[k]}"></span>` : '';
+  const prob = t.geblokkeerd + t.issue;
   return `<div class="vp-rij">
     <div class="vp-kop"><span class="vp-naam">${htmlEsc(naam)}</span><span class="vp-pct">${pct}%</span></div>
-    <div class="statbar">${seg('gereed')}${seg('bezig')}${seg('geblokkeerd')}${seg('open')}</div>
-    <div class="vp-meta">${set.length} WP · ${t.gereed} gereed · ${t.bezig} bezig${t.geblokkeerd ? ` · <span style="color:var(--rood)">${t.geblokkeerd} geblokkeerd</span>` : ''}</div>
+    <div class="statbar">${seg('gereed')}${seg('bezig')}${seg('vertraagd')}${seg('issue')}${seg('geblokkeerd')}${seg('open')}</div>
+    <div class="vp-meta">${set.length} WP · ${t.gereed} gereed · ${t.bezig} lopend${t.vertraagd ? ` · <span style="color:var(--amber,#f59e0b)">${t.vertraagd} vertraagd</span>` : ''}${prob ? ` · <span style="color:var(--rood)">${prob} geblokkeerd/issue</span>` : ''}</div>
   </div>`;
 }
 function dashboardWps() {
@@ -934,7 +898,7 @@ function renderDashboard() {
   const wps = dashboardWps();
   const s = statsVoor(wps);
 
-  const telling = { open: 0, bezig: 0, gereed: 0, geblokkeerd: 0, nvt: 0 };
+  const telling = leegTelling();
   let actGereed = 0, actTotaal = 0;
   wps.forEach((w) => {
     const v = State.voortgang[w.id] || {};
@@ -966,7 +930,7 @@ function renderDashboard() {
     { val: `${actGereed}<small>/${actTotaal}</small>`, label: 'Activiteiten gereed', cls: '', actie: 'overzicht' },
     { val: s.kritiek, label: 'Kritieke werkpakketten', cls: 'kpi-rood', actie: 'kritiek' },
     { val: s.gevaar, label: 'Werkpakketten met risico', cls: 'kpi-amber', actie: 'gevaar' },
-    { val: telling.geblokkeerd, label: 'Geblokkeerde activiteiten', cls: 'kpi-rood', actie: 'geblok' },
+    { val: telling.geblokkeerd + telling.issue, label: 'Geblokkeerd / issues', cls: 'kpi-rood', actie: 'geblok' },
     { val: mp30, label: 'Mijlpalen ≤ 30 dagen', cls: '', actie: 'mijlpalen' },
   ];
   el('#dashKpis').innerHTML = tiles.map((t) =>
@@ -1201,7 +1165,7 @@ function bouwRapportData(scope, van, tot, label) {
   const wps = scope === 'portfolio' ? State.werkpakketten : State.werkpakketten.filter((w) => w.project === scope);
   const s = statsVoor(wps);
 
-  const telling = { open: 0, bezig: 0, gereed: 0, geblokkeerd: 0, nvt: 0 };
+  const telling = leegTelling();
   wps.forEach((w) => { const v = State.voortgang[w.id] || {}; FASES.forEach((f) => f.activiteiten.forEach((a) => { telling[(v[a.code] && v[a.code].status) || 'open']++; })); });
 
   const mpPeriode = [];
@@ -1254,7 +1218,7 @@ function bouwRapportData(scope, van, tot, label) {
   return {
     scope, label, peildatum: fmtDatum(VANDAAG),
     periode: { van: fmtDatum(van), tot: fmtDatum(tot) },
-    kerncijfers: { werkpakketten: s.aantal, projecten: [...new Set(wps.map((w) => w.project))].length, apds: s.apds.length, kmNieuwTrace: +(s.meters / 1000).toFixed(1), gemVoortgangPct: s.pct, kritiekeWerkpakketten: s.kritiek, risicoWerkpakketten: s.gevaar, geblokkeerdeActiviteiten: telling.geblokkeerd },
+    kerncijfers: { werkpakketten: s.aantal, projecten: [...new Set(wps.map((w) => w.project))].length, apds: s.apds.length, kmNieuwTrace: +(s.meters / 1000).toFixed(1), gemVoortgangPct: s.pct, kritiekeWerkpakketten: s.kritiek, risicoWerkpakketten: s.gevaar, geblokkeerdeActiviteiten: telling.geblokkeerd + telling.issue, vertraagdeActiviteiten: telling.vertraagd },
     statusverdelingActiviteiten: telling,
     faseverdeling: s.faseTeller,
     voortgangsontwikkeling: voortgangsDelta,
@@ -1400,11 +1364,33 @@ function parseCsv(tekst) {
   if (field.length || row.length) { row.push(field); rows.push(row); }
   return rows;
 }
+// CSV-statuscode → app-status. 1=afgerond, 2=lopend, 3=vertraagd, 4=issue, 5=n.v.t.
+const CSV_STATUSCODE = { 1: 'gereed', 2: 'bezig', 3: 'vertraagd', 4: 'issue', 5: 'nvt' };
+// Bekende afwijkende activiteitcodes in de CSV t.o.v. de app-codes.
+const CSV_CODE_ALIAS = { '0.03.01': '1.03.01', '2.03': '2.03.02', '2.05': '2.05.01' };
+// Bepaal voor een CSV-kolomkop de bijbehorende app-activiteitcode (of null).
+function csvActCode(header) {
+  const m = (header || '').match(/^\s*(\d{1,2}(?:\.\d{1,2}){1,2})\b/);
+  if (!m) return null;
+  const code = m[1];
+  if (ACTIVITEIT_INDEX[code]) return code;
+  const alt = code.replace(/^0(\d)/, '$1');          // 01.03.02 → 1.03.02
+  if (ACTIVITEIT_INDEX[alt]) return alt;
+  if (CSV_CODE_ALIAS[code]) return CSV_CODE_ALIAS[code];
+  return null;
+}
+// Vat meerdere CSV-substatussen samen tot één activiteitstatus.
+const STATUS_PRIO = { issue: 5, vertraagd: 4, bezig: 3, gereed: 2 };
+function vatStatusSamen(lijst) {
+  const echt = lijst.filter((s) => s !== 'nvt');
+  if (!echt.length) return lijst.length ? 'nvt' : null;
+  return echt.reduce((best, s) => ((STATUS_PRIO[s] || 0) > (STATUS_PRIO[best] || 0) ? s : best));
+}
 function importeerCsv(tekst) {
   const rows = parseCsv(tekst);
   const headerIdx = rows.findIndex((r) => (r[0] || '').trim().toLowerCase() === 'projectnaam');
   if (headerIdx < 0) throw new Error('Kon de kolomkoppen (rij met "Projectnaam") niet vinden.');
-  const header = rows[headerIdx].map((h) => h.replace(/\s+/g, ' ').trim());
+  const header = rows[headerIdx].map((h) => h.replace(/\s+/g, ' ').trim().replace(/:$/, ''));
   const colIdx = (naam) => header.findIndex((h) => h.toLowerCase() === naam.toLowerCase());
   const cProject = colIdx('Projectnaam'), cApd = colIdx('APD Bouwdeel'), cTrac = colIdx('Liander Tracdeel');
   const cWp = header.findIndex((h) => h.toLowerCase().startsWith('werkpakket'));
@@ -1412,7 +1398,11 @@ function importeerCsv(tekst) {
   const cLen = header.findIndex((h) => h.toLowerCase().startsWith('lengte nieuw'));
   const cMpw = header.findIndex((h) => h.toLowerCase().startsWith('uitvoering meters'));
   const mCols = {}; MIJLPALEN.forEach((m) => { mCols[m.key] = colIdx(m.csv); });
-  const nieuwe = [], gezien = new Set();
+  // Statuskolommen: elke kop met een herkenbare activiteitcode (1..5 als waarde).
+  const statusCols = [];
+  header.forEach((h, i) => { const code = csvActCode(h); if (code) statusCols.push({ i, code }); });
+  const nieuwe = [], voortgang = {}, gezien = new Set();
+  let statusGevonden = 0;
   for (let r = headerIdx + 1; r < rows.length; r++) {
     const row = rows[r];
     const project = (row[cProject] || '').trim();
@@ -1428,9 +1418,19 @@ function importeerCsv(tekst) {
     while (gezien.has(id)) { id = `${project}|${wp}|${tracStart}|${tracEind}#${n++}`; }
     gezien.add(id);
     nieuwe.push({ id, project, apd: (cApd >= 0 ? row[cApd] : '').trim(), tracdeel: (cTrac >= 0 ? row[cTrac] : '').trim(), wp, tracStart, tracEind, engineer, lengteNieuw: parseInt((cLen >= 0 ? row[cLen] : '').replace(/\D/g, '')) || 0, mPerWeek: parseInt((cMpw >= 0 ? row[cMpw] : '').replace(/\D/g, '')) || 0, mijlpalen: mij });
+    // Activiteitstatussen uit de statuskolommen (meerdere kolommen → samengevat per code).
+    const perCode = {};
+    statusCols.forEach(({ i, code }) => {
+      const raw = (row[i] || '').trim();
+      if (!/^[1-5]$/.test(raw)) return;
+      (perCode[code] = perCode[code] || []).push(CSV_STATUSCODE[+raw]);
+    });
+    const vg = {};
+    Object.entries(perCode).forEach(([code, lijst]) => { const st = vatStatusSamen(lijst); if (st) vg[code] = { status: st }; });
+    if (Object.keys(vg).length) { voortgang[id] = vg; statusGevonden++; }
   }
   if (!nieuwe.length) throw new Error('Geen geldige werkpakket-rijen gevonden.');
-  return nieuwe;
+  return { werkpakketten: nieuwe, voortgang, statusGevonden };
 }
 
 /* ------------------------------ Tabs / UI -------------------------------- */
@@ -1452,7 +1452,6 @@ function updateDbStatus(s) {
 async function init() {
   DB.onStatus((s) => updateDbStatus(s));
   await State.laad();
-  if (State._moetBewaren) { State.bewaar(); State._moetBewaren = false; }
   registersInit();
 
   els('.tab').forEach((t) => t.addEventListener('click', () => toonTab(t.dataset.tab)));
@@ -1498,11 +1497,14 @@ async function init() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const wps = importeerCsv(reader.result);
-        State.werkpakketten = wps; State.bewaar();
-        State.filters = { project: '', apd: '', engineer: '', fase: '', zoek: '' };
+        const { werkpakketten: wps, voortgang, statusGevonden } = importeerCsv(reader.result);
+        State.werkpakketten = wps;
+        State.voortgang = voortgang || {};
+        State.bewaar();
+        State.filters = { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' };
         render();
-        el('#importMelding').innerHTML = `<span class="ok">${wps.length} werkpakketten geïmporteerd uit "${htmlEsc(file.name)}".</span>`;
+        const statusTxt = statusGevonden ? ` Statussen ingelezen voor ${statusGevonden} werkpakket(ten).` : '';
+        el('#importMelding').innerHTML = `<span class="ok">${wps.length} werkpakketten geïmporteerd uit "${htmlEsc(file.name)}".${statusTxt}</span>`;
         toast(`${wps.length} werkpakketten geïmporteerd`, 'ok');
         toonTab('overzicht');
       } catch (err) { el('#importMelding').innerHTML = `<span class="fout">Import mislukt: ${htmlEsc(err.message)}</span>`; }
@@ -1533,13 +1535,13 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnSeed').addEventListener('click', () => {
-    if (!confirm('Voorbeelddata laden? Huidige werkpakketten worden vervangen. Voortgang blijft bewaard.')) return;
-    State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w })); State.bewaar(); render(); toonTab('overzicht');
-  });
-  el('#btnDemo').addEventListener('click', () => {
-    if (!confirm('Realistische voorbeeldvoortgang genereren voor alle werkpakketten? Bestaande statussen worden overschreven.')) return;
-    State.voortgang = genereerDemoVoortgang(State.werkpakketten); State.bewaar(); render(); toonTab('dashboard');
-    toast('Realistische voortgang gegenereerd', 'ok');
+    if (!confirm('Alle projecten en planning opnieuw laden uit de engineeringsplanning? Voortgang, doorlooptijden, vergunningen en risico’s worden gewist.')) return;
+    State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
+    State.voortgang = {}; State.doorlooptijden = {}; State.vergunningen = []; State.risicos = [];
+    State.filters = { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' };
+    el('#filterZoek').value = '';
+    State.bewaar(); render(); toonTab('overzicht');
+    toast('Alle projecten herladen uit de planning', 'ok');
   });
   el('#btnWis').addEventListener('click', async () => {
     if (!confirm('ALLE data, voortgang en momentopnames wissen — ook in de database? Dit kan niet ongedaan gemaakt worden.')) return;

@@ -329,7 +329,8 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .kr-wp{display:block;margin-bottom:6px;font-size:13px}
 .kr-sigs{display:flex;flex-wrap:wrap;gap:6px}
 .sig{font-size:11px;padding:3px 9px;border-radius:7px;background:var(--line-2);color:var(--ink-2);font-weight:550}
-.sig-geblokkeerd{background:var(--rood-soft);color:#b91c1c}
+.sig-geblokkeerd{background:#ede9fe;color:#6d28d9}
+.sig-vertraagd{background:var(--amber-soft);color:#b45309}
 .sig-achterstand{background:#fef2f2;color:#dc2626}
 .sig-deadline{background:var(--amber-soft);color:#b45309}
 .sig-overbelast{background:#ffedd5;color:#c2410c}
@@ -403,6 +404,8 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .tflag.kritiek{background:var(--rood-soft);color:#b91c1c}
 .tflag.gevaar{background:var(--amber-soft);color:#b45309}
 .tflag.geblokkeerd{background:#ede9fe;color:#6d28d9}
+.tflag.issue{background:#fee2e2;color:#b91c1c}
+.tflag.vertraagd{background:var(--amber-soft);color:#b45309}
 .tflag.mijlpaal{background:var(--accent-soft);color:#1d4ed8}
 .taak-deadline{font-size:12px;color:var(--ink-2);font-weight:600}
 .taak-deadline em{color:var(--sub);font-weight:400;font-style:normal}
