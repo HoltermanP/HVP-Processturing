@@ -74,9 +74,12 @@ const State = {
     this.instellingen = staat.instellingen || {};
     this.vergunningen = staat.vergunningen || [];
     this.risicos = staat.risicos || [];
-    this.werkpakketten = (staat.werkpakketten && staat.werkpakketten.length)
-      ? staat.werkpakketten
-      : (window.SEED_WERKPAKKETTEN || []);
+    const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
+    this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
+    // Verse start: ook de statussen uit de planning meeladen.
+    if (verseSeed && Object.keys(this.voortgang).length === 0 && window.SEED_VOORTGANG) {
+      this.voortgang = JSON.parse(JSON.stringify(window.SEED_VOORTGANG));
+    }
     if (this.instellingen.peildatum) {
       const d = parseDatum(this.instellingen.peildatum);
       if (d) VANDAAG = d;
@@ -1390,13 +1393,19 @@ function importeerCsv(tekst) {
   const rows = parseCsv(tekst);
   const headerIdx = rows.findIndex((r) => (r[0] || '').trim().toLowerCase() === 'projectnaam');
   if (headerIdx < 0) throw new Error('Kon de kolomkoppen (rij met "Projectnaam") niet vinden.');
+  // Normaliseer: diacrieten weg + lege tekens, zodat "Tracé start" ≈ "trac start".
+  const n = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ�]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
   const header = rows[headerIdx].map((h) => h.replace(/\s+/g, ' ').trim().replace(/:$/, ''));
-  const colIdx = (naam) => header.findIndex((h) => h.toLowerCase() === naam.toLowerCase());
-  const cProject = colIdx('Projectnaam'), cApd = colIdx('APD Bouwdeel'), cTrac = colIdx('Liander Tracdeel');
-  const cWp = header.findIndex((h) => h.toLowerCase().startsWith('werkpakket'));
-  const cStart = colIdx('Trac start'), cEind = colIdx('Trac eind'), cEng = colIdx('Engineer');
-  const cLen = header.findIndex((h) => h.toLowerCase().startsWith('lengte nieuw'));
-  const cMpw = header.findIndex((h) => h.toLowerCase().startsWith('uitvoering meters'));
+  const colIdx = (naam) => header.findIndex((h) => n(h) === n(naam));
+  const vind = (fn) => header.findIndex((h) => fn(n(h)));
+  const cProject = colIdx('Projectnaam'), cApd = colIdx('APD Bouwdeel');
+  const cTrac = vind((h) => h.startsWith('liander') || h.includes('tracdeel') || h.includes('tracedeel'));
+  const cWp = vind((h) => h.startsWith('werkpakket'));
+  const cStart = vind((h) => h.startsWith('trac') && h.includes('start'));
+  const cEind = vind((h) => h.startsWith('trac') && h.includes('eind'));
+  const cEng = colIdx('Engineer');
+  const cLen = vind((h) => h.startsWith('lengte nieuw'));
+  const cMpw = vind((h) => h.startsWith('uitvoering meters'));
   const mCols = {}; MIJLPALEN.forEach((m) => { mCols[m.key] = colIdx(m.csv); });
   // Statuskolommen: elke kop met een herkenbare activiteitcode (1..5 als waarde).
   const statusCols = [];
@@ -1535,13 +1544,14 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnSeed').addEventListener('click', () => {
-    if (!confirm('Alle projecten en planning opnieuw laden uit de engineeringsplanning? Voortgang, doorlooptijden, vergunningen en risico’s worden gewist.')) return;
+    if (!confirm('Alle projecten, planning én statussen opnieuw laden uit de engineeringsplanning? Doorlooptijden, vergunningen en risico’s worden gewist.')) return;
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
-    State.voortgang = {}; State.doorlooptijden = {}; State.vergunningen = []; State.risicos = [];
+    State.voortgang = window.SEED_VOORTGANG ? JSON.parse(JSON.stringify(window.SEED_VOORTGANG)) : {};
+    State.doorlooptijden = {}; State.vergunningen = []; State.risicos = [];
     State.filters = { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' };
     el('#filterZoek').value = '';
     State.bewaar(); render(); toonTab('overzicht');
-    toast('Alle projecten herladen uit de planning', 'ok');
+    toast('Projecten en statussen herladen uit de planning', 'ok');
   });
   el('#btnWis').addEventListener('click', async () => {
     if (!confirm('ALLE data, voortgang en momentopnames wissen — ook in de database? Dit kan niet ongedaan gemaakt worden.')) return;
