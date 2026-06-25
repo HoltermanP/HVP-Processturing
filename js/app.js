@@ -58,6 +58,8 @@ const State = {
   instellingen: {},
   vergunningen: [],
   risicos: [],
+  gebruikers: {},
+  toewijzingen: {},
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   actiefWp: null,
   horizon: '30',
@@ -74,6 +76,8 @@ const State = {
     this.instellingen = staat.instellingen || {};
     this.vergunningen = staat.vergunningen || [];
     this.risicos = staat.risicos || [];
+    this.gebruikers = staat.gebruikers || {};
+    this.toewijzingen = staat.toewijzingen || {};
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     // Verse start: ook de statussen uit de planning meeladen.
@@ -94,6 +98,8 @@ const State = {
       instellingen: this.instellingen,
       vergunningen: this.vergunningen,
       risicos: this.risicos,
+      gebruikers: this.gebruikers,
+      toewijzingen: this.toewijzingen,
     });
   },
   wpVoortgang(wpId) {
@@ -399,7 +405,23 @@ function render() {
   renderActiviteiten();
   renderDoorlooptijden();
   renderInstellingen();
+  if (typeof renderMijnProjecten === 'function') renderMijnProjecten();
+  if (typeof renderToewijzen === 'function') renderToewijzen();
+  if (typeof renderAccounts === 'function') renderAccounts();
   if (State.actiefWp) renderDetail(State.actiefWp);
+}
+
+// Schakel bewerk-elementen aan/uit op basis van de rol (handhaving in de UI).
+function gateUI() {
+  const vol = !window.Auth || Auth.magVolledig();
+  ['#csvFile', '#jsonFile', '#btnSeed', '#btnWis', '#instSnapshot', '#instPeildatum', '#instModel'].forEach((s) => {
+    const n = el(s); if (n) n.disabled = !vol;
+  });
+  document.querySelectorAll('.filebtn').forEach((l) => l.classList.toggle('uit', !vol));
+  ['#vgToevoegen', '#riskToevoegen'].forEach((s) => { const n = el(s); if (n) n.style.display = vol ? '' : 'none'; });
+  const setTab = (naam, zicht) => { const t = document.querySelector(`.tab[data-tab="${naam}"]`); if (t) t.style.display = zicht ? '' : 'none'; };
+  setTab('toewijzen', !window.Auth || Auth.magToewijzen());
+  setTab('accounts', !window.Auth || Auth.magAccounts());
 }
 
 function vulFilters() {
@@ -799,8 +821,10 @@ function renderDetail(wpId) {
   el('#detailFaseInfo').innerHTML = hf.fase
     ? `Huidige fase volgens planning: <strong style="color:${hf.fase.kleur}">${htmlEsc(hf.fase.naam)}</strong> <span class="badge ${hf.status==='afgerond'?'done':hf.status==='gepland'?'plan':'live'}">${hf.status}</span> · activiteit-voortgang ${av.klaar}/${av.totaal} (${av.pct}%)`
     : 'Geen fase-informatie beschikbaar.';
-  el('#detailRegisters').innerHTML = detailRegistersHtml(w);
+  const magBew = !window.Auth || Auth.magWpBewerken(w.id);
+  el('#detailRegisters').innerHTML = (magBew ? '' : leesAlleenBanner(w)) + detailRegistersHtml(w);
   bindDetailRegisters(w);
+  const dis = magBew ? '' : ' disabled';
   el('#detailFasen').innerHTML = FASES.map((f) => {
     const fv = faseVoortgang(w, f);
     const open = (hf.fase && hf.fase.id === f.id) ? ' open' : '';
@@ -810,9 +834,9 @@ function renderDetail(wpId) {
       const opts = Object.entries(STATUSSEN).map(([k, o]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${o.label}</option>`).join('');
       return `<div class="act ${cur}">
         <div class="act-top"><span class="act-code">${htmlEsc(a.code)}</span><span class="act-naam">${htmlEsc(a.naam)}</span>
-        <select class="act-status" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" style="--c:${STATUSSEN[cur].kleur}">${opts}</select></div>
+        <select class="act-status" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" style="--c:${STATUSSEN[cur].kleur}"${dis}>${opts}</select></div>
         <div class="act-omschr">${htmlEsc(a.omschrijving)}</div>
-        <input class="act-notitie" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" placeholder="Notitie / actie…" value="${htmlEsc(notitie)}"></div>`;
+        <input class="act-notitie" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" placeholder="Notitie / actie…" value="${htmlEsc(notitie)}"${dis}></div>`;
     }).join('');
     const sch = faseSchema(w, f);
     const budget = sch ? `<div class="fbudget ${sch.overschrijding ? 'krap' : ''}">Venster ${fmtDatum(sch.start)} → ${fmtDatum(sch.eind)} · <strong>${sch.beschikbaar}</strong> werkdagen beschikbaar · som doorlooptijden <strong>${sch.benodigd}</strong> wd ${sch.overschrijding ? '<span class="waarsch">parallel werk nodig</span>' : '<span class="ok">ruim</span>'}</div>` : '';
@@ -823,14 +847,22 @@ function renderDetail(wpId) {
   }).join('');
   els('#detailFasen .act-status').forEach((sl) => sl.addEventListener('change', (e) => {
     const { wp, code } = e.target.dataset;
+    if (window.Auth && !Auth.magWpBewerken(wp)) return;
     State.wpVoortgang(wp)[code] = Object.assign(State.wpVoortgang(wp)[code] || {}, { status: e.target.value });
     State.bewaar(); renderDetail(wp); renderOverzicht(); renderTaken(); renderDashboard();
   }));
   els('#detailFasen .act-notitie').forEach((inp) => inp.addEventListener('change', (e) => {
     const { wp, code } = e.target.dataset;
+    if (window.Auth && !Auth.magWpBewerken(wp)) return;
     State.wpVoortgang(wp)[code] = Object.assign(State.wpVoortgang(wp)[code] || {}, { notitie: e.target.value });
     State.bewaar();
   }));
+}
+
+function leesAlleenBanner(w) {
+  const toegew = window.Auth && Auth.magToewijzen();
+  return `<div class="lees-alleen">🔒 Alleen-lezen — je bent niet toegewezen aan dit werkpakket.${
+    toegew ? ' Wijs jezelf toe via <strong>Toewijzen</strong> om te kunnen bewerken.' : ''}</div>`;
 }
 
 /* --------------------------- Activiteiten-ref ---------------------------- */
@@ -850,8 +882,9 @@ function renderDoorlooptijden() {
     const rows = f.activiteiten.map((a) => {
       const eff = State.getDt(a.code);
       const aangepast = State.doorlooptijden[a.code] != null && State.doorlooptijden[a.code] !== '';
+      const dis = (!window.Auth || Auth.magVolledig()) ? '' : ' disabled';
       return `<tr><td class="rc">${htmlEsc(a.code)}</td><td>${htmlEsc(a.naam)}</td>
-        <td class="num"><input type="number" min="0" class="dt-inp" data-code="${htmlEsc(a.code)}" value="${eff}"></td>
+        <td class="num"><input type="number" min="0" class="dt-inp" data-code="${htmlEsc(a.code)}" value="${eff}"${dis}></td>
         <td class="num sub">${a.dtDefault}${aangepast ? ' <span class="aangepast">aangepast</span>' : ''}</td></tr>`;
     }).join('');
     const somDef = f.activiteiten.reduce((s, a) => s + a.dtDefault, 0);
@@ -861,6 +894,7 @@ function renderDoorlooptijden() {
       <tbody>${rows}</tbody></table></section>`;
   }).join('');
   els('#dtBody .dt-inp').forEach((inp) => inp.addEventListener('change', (e) => {
+    if (window.Auth && !Auth.magVolledig()) return;
     const code = e.target.dataset.code, val = e.target.value.trim();
     if (val === '' || +val === ACTIVITEIT_INDEX[code].activiteit.dtDefault) delete State.doorlooptijden[code];
     else State.doorlooptijden[code] = +val;
@@ -1459,8 +1493,11 @@ function updateDbStatus(s) {
 
 /* ------------------------------- Init ------------------------------------ */
 async function init() {
+  await Auth.init();              // blokkeert tot er is ingelogd (of devmodus)
+  Auth.montUserButton();
   DB.onStatus((s) => updateDbStatus(s));
   await State.laad();
+  Auth.koppelGebruiker();        // registreer gebruiker + bepaal rol
   registersInit();
 
   els('.tab').forEach((t) => t.addEventListener('click', () => toonTab(t.dataset.tab)));
@@ -1567,9 +1604,10 @@ async function init() {
     if (node) node.innerHTML = `Database <strong style="color:${st.database ? '#047857' : '#b45309'}">${st.database ? 'gekoppeld' : 'niet ingesteld'}</strong> · AI <strong style="color:${st.ai ? '#047857' : '#b45309'}">${st.ai ? 'beschikbaar' : 'niet ingesteld'}</strong>`;
   });
 
+  gateUI();
   el('#peildatum').textContent = fmtDatum(VANDAAG);
   render();
-  toonTab('overzicht');
+  toonTab(Auth.magVolledig() ? 'overzicht' : 'mijn');
 }
 
 document.addEventListener('DOMContentLoaded', init);

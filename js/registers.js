@@ -36,6 +36,7 @@ const RISK_STATUS = {
 const SCHAAL = { 1: 'Zeer laag', 2: 'Laag', 3: 'Middel', 4: 'Hoog', 5: 'Zeer hoog' };
 
 /* -------------------------------- Helpers -------------------------------- */
+function magReg() { return !window.Auth || Auth.magVolledig(); }
 function nieuwId(prefix) { return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`; }
 function wpById(id) { return State.werkpakketten.find((w) => w.id === id); }
 function vgLabelType(t) { const m = VG_TYPES.find((x) => x[0] === t); return m ? m[1] : t; }
@@ -174,6 +175,7 @@ function vergunningForm(item, prefillWpId) {
 }
 
 function openVergunning(item, prefillWpId) {
+  if (!magReg()) { toast('Alleen ontwerpleider/manager kan vergunningen bewerken', 'fout'); return; }
   openModal(item ? 'Vergunning / ZRO bewerken' : 'Vergunning / ZRO toevoegen', vergunningForm(item, prefillWpId));
   el('#vgOpslaan').addEventListener('click', () => {
     const wpId = el('#vgWp').value;
@@ -330,6 +332,7 @@ function risicoForm(item, prefillWpId, prefillProject) {
 }
 
 function openRisico(item, prefillWpId, prefillProject) {
+  if (!magReg()) { toast('Alleen ontwerpleider/manager kan risico’s bewerken', 'fout'); return; }
   openModal(item ? 'Risico bewerken' : 'Risico toevoegen', risicoForm(item, prefillWpId, prefillProject));
   // werkpakket-keuze meebewegen met project
   el('#rkProject').addEventListener('change', () => {
@@ -378,10 +381,12 @@ function detailRegistersHtml(wp) {
     const score = r.kans * r.impact;
     return `<li data-rk="${htmlEsc(r.id)}"><span>${htmlEsc(r.omschrijving || '')}</span><span class="reg-score" style="background:${riskScoreKleur(score)}">${score}</span></li>`;
   }).join('') : '<li class="leeg-mini">Nog geen risico’s.</li>';
+  const addVg = magReg() ? '<button class="mini-knop" id="drawVgAdd">+ toevoegen</button>' : '';
+  const addRk = magReg() ? '<button class="mini-knop" id="drawRkAdd">+ toevoegen</button>' : '';
   return `<div class="reg-blok">
-    <div class="reg-kop"><h3>Vergunningen &amp; ZRO</h3><button class="mini-knop" id="drawVgAdd">+ toevoegen</button></div>
+    <div class="reg-kop"><h3>Vergunningen &amp; ZRO</h3>${addVg}</div>
     <ul class="reg-mini-lijst">${vgRijen}</ul>
-    <div class="reg-kop" style="margin-top:12px"><h3>Risico's</h3><button class="mini-knop" id="drawRkAdd">+ toevoegen</button></div>
+    <div class="reg-kop" style="margin-top:12px"><h3>Risico's</h3>${addRk}</div>
     <ul class="reg-mini-lijst">${rkRijen}</ul>
   </div>`;
 }

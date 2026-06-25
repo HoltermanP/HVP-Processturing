@@ -43,6 +43,8 @@ const DB = (() => {
       instellingen: cache.instellingen || {},
       vergunningen: cache.vergunningen || [],
       risicos: cache.risicos || [],
+      gebruikers: cache.gebruikers || {},
+      toewijzingen: cache.toewijzingen || {},
     };
     try {
       setStatus('bezig');
@@ -58,6 +60,8 @@ const DB = (() => {
           if (d.instellingen) staat.instellingen = d.instellingen;
           if (Array.isArray(d.vergunningen)) staat.vergunningen = d.vergunningen;
           if (Array.isArray(d.risicos)) staat.risicos = d.risicos;
+          if (d.gebruikers) staat.gebruikers = d.gebruikers;
+          if (d.toewijzingen) staat.toewijzingen = d.toewijzingen;
           laatsteSync = d._bijgewerkt || new Date().toISOString();
           schrijfCache(staat);
           setStatus('online');
@@ -92,6 +96,8 @@ const DB = (() => {
           instellingen: staat.instellingen,
           vergunningen: staat.vergunningen,
           risicos: staat.risicos,
+          gebruikers: staat.gebruikers,
+          toewijzingen: staat.toewijzingen,
         }),
       });
       if (r.ok) {

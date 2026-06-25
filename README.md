@@ -28,10 +28,40 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
   terugblik op de afgelopen periode én een vooruitblik op wat er nog moet
   gebeuren. De cijfers worden in de app berekend; de **Anthropic-API** schrijft
   het verhaal (streaming, in het Nederlands).
+- **Mijn projecten** — alleen de werkpakketten waaraan jij bent toegewezen, met
+  je eigen taken voor de komende periode.
 - **Activiteiten / Doorlooptijden** — referentiebibliotheek en instelbare
   doorlooptijden (werkdagen) per activiteit.
+- **Toewijzen** (ontwerpleider/manager) — gebruikers per werkpakket koppelen.
+- **Accounts** (ontwerpleider/manager) — rollen toekennen aan gebruikers.
 - **Beheer** — CSV-import, JSON-export/herstel, instellingen (peildatum, AI-model)
   en momentopnames voor trends.
+
+## Login & rechten
+
+Authenticatie verloopt via **Clerk** (login, registratie, profiel/wachtwoord).
+**Rollen en toewijzingen** staan in de eigen database: Clerk bepaalt *wie* je
+bent, de app bepaalt *wat* je mag. De handhaving gebeurt in de UI.
+
+Rollen: **engineer, omgevingsmanager, projectleider, ontwerpleider, manager**.
+
+- **Ontwerpleider** en **manager** mogen alles bewerken, werkpakketten toewijzen
+  en accounts/rollen beheren.
+- **Engineer, omgevingsmanager, projectleider** zien álle projecten in de
+  tabbladen, maar bewerken alleen de **voortgang van hun toegewezen
+  werkpakketten** (de rest is alleen-lezen).
+- Toewijzen gebeurt **per werkpakket**; "Mijn projecten" toont automatisch de
+  bijbehorende projecten.
+
+De **eerste gebruiker** die inlogt wordt automatisch **manager** (zodat er altijd
+iemand kan toewijzen en rollen kan beheren). Extra automatische managers kun je
+opgeven via `window.HVP_ADMIN_EMAILS` in `js/config.js`. Nieuwe gebruikers
+verschijnen in **Accounts** zodra ze voor het eerst inloggen; standaardrol
+*engineer*.
+
+> Zonder `CLERK_PUBLISHABLE_KEY` draait de app in **devmodus**: geen login,
+> volledige rechten — handig tijdens lokaal ontwikkelen voordat Clerk is
+> ingesteld.
 
 ## Architectuur
 
@@ -40,7 +70,11 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
   server-side via **environment variables**.
   - `api/state.js` — leest/schrijft de volledige staat in **Neon** (Postgres).
   - `api/rapport.js` — genereert rapportages via de **Anthropic-API** (streaming).
+  - `api/config.js` — geeft de publieke **Clerk Publishable Key** aan de browser.
   - `api/status.js` — meldt of de env-variabelen zijn ingesteld.
+- **Auth**: `js/auth.js` (Clerk-login + rolbepaling) en `js/rechten.js`
+  (Mijn projecten, Toewijzen, Accounts). Rollen/toewijzingen worden met de
+  overige staat in Neon bewaard.
 - **Opslag**: een Neon-database is de bron; **localStorage** dient als offline
   cache, zodat de app blijft werken zonder verbinding en bij herverbinding
   synchroniseert. De verbindingsstatus staat rechtsboven in de balk.
@@ -53,7 +87,11 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
    Variables**:
    - `DATABASE_URL` = de Neon-connectionstring
    - `ANTHROPIC_API_KEY` = de Anthropic-sleutel
-4. Deploy. De tabel `hvp_kv` wordt bij het eerste gebruik automatisch aangemaakt
+   - `CLERK_PUBLISHABLE_KEY` = de Clerk Publishable Key (voor login)
+4. Maak een **Clerk**-applicatie (https://dashboard.clerk.com), kies de
+   inlogmethoden en kopieer de **Publishable Key** naar de env-variabele
+   hierboven. Voeg je productie-URL toe als toegestane origin in Clerk.
+5. Deploy. De tabel `hvp_kv` wordt bij het eerste gebruik automatisch aangemaakt
    (zie ook `db/schema.sql`).
 
 Lokaal draaien met de volledige stack (inclusief database en AI):
