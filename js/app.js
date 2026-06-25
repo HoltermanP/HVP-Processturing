@@ -1238,14 +1238,36 @@ function bouwRapportData(scope, van, tot, label) {
   mpKomend.sort((a, b) => a.dagen - b.dagen);
 
   const taken = komendeTaken(wps, horizonTot);
-  const kritiek = taken.filter((t) => t.ernst >= 3).slice(0, 25).map((t) => ({
+  const RISICO_CAP = 50;
+
+  // Reeds te laat (achteraf-signaal): fase is over de einddatum, de activiteit is
+  // geblokkeerd/issue, of de doorlooptijd past objectief niet meer vóór de einddatum.
+  const reedsAlle = taken.filter((t) => t.ernst >= 3).sort((a, b) => a.faseEind - b.faseEind);
+  const reedsTeLaat = reedsAlle.slice(0, RISICO_CAP).map((t) => ({
     wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`,
-    fase: t.fase.naam, reden: t.overtijd ? 'fase over einddatum' : (t.status === 'geblokkeerd' ? 'geblokkeerd' : 'doorlooptijd past niet meer'),
+    fase: t.fase.naam,
+    reden: t.overtijd ? 'fase over einddatum'
+      : (t.status === 'geblokkeerd' || t.status === 'issue') ? t.status
+      : 'doorlooptijd past niet meer',
     faseEind: fmtDatum(t.faseEind),
   }));
-  const gevaar = taken.filter((t) => t.ernst === 2).slice(0, 25).map((t) => ({
-    wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`, fase: t.fase.naam, spelingWd: t.speling, faseEind: fmtDatum(t.faseEind),
+
+  // Dreigt te laat (vooraf-signaal): nog haalbaar, MITS nu gestart. De uiterste
+  // startdatum (latestStart = einddatum − doorlooptijd) is bereikt of nadert; de
+  // speling raakt op. Gesorteerd op meest dringende uiterste startdatum.
+  const dreigtAlle = taken.filter((t) => t.ernst === 2).sort((a, b) => a.latestStart - b.latestStart);
+  const dreigtTeLaat = dreigtAlle.slice(0, RISICO_CAP).map((t) => ({
+    wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`,
+    fase: t.fase.naam,
+    uiterlijkStarten: fmtDatum(t.latestStart),
+    dagenTotUiterste: dagenVerschil(VANDAAG, t.latestStart),
+    spelingWd: t.speling,
+    faseEind: fmtDatum(t.faseEind),
   }));
+  const nietGetoond = {
+    reedsTeLaat: Math.max(0, reedsAlle.length - reedsTeLaat.length),
+    dreigtTeLaat: Math.max(0, dreigtAlle.length - dreigtTeLaat.length),
+  };
 
   const perProject = [...new Set(wps.map((w) => w.project))].sort().map((p) => {
     const ps = statsVoor(wps.filter((w) => w.project === p));
@@ -1260,7 +1282,7 @@ function bouwRapportData(scope, van, tot, label) {
     faseverdeling: s.faseTeller,
     voortgangsontwikkeling: voortgangsDelta,
     terugblik: { mijlpalenInPeriode: mpPeriode },
-    vooruitblik: { naderendeMijlpalen: mpKomend.slice(0, 25), kritiekeTaken: kritiek, risicoTaken: gevaar },
+    vooruitblik: { naderendeMijlpalen: mpKomend.slice(0, 25), reedsTeLaat, dreigtTeLaat, nietGetoond },
     registers: registerRapportData(scope),
     perProject,
   };
@@ -1271,12 +1293,20 @@ function rapportPrompt(data) {
 
 Schrijf in Markdown. Gebruik UITSLUITEND de aangeleverde cijfers en feiten — verzin geen getallen, namen of mijlpalen. Waar gegevens ontbreken, benoem dat kort. Wees concreet en stuurgericht: benoem waar het goed gaat, waar het risico loopt en wat de komende periode concreet moet gebeuren.
 
+STUUR PROACTIEF, NIET ACHTERAF. De data bevat twee gescheiden risicocategorieën onder "vooruitblik":
+- "dreigtTeLaat" = acties die NOG haalbaar zijn, mits ze nu starten. Het veld "uiterlijkStarten" is de uiterste startdatum en "dagenTotUiterste" telt de werk-/kalenderdagen daarheen (negatief = die datum is al gepasseerd, dus acuut). Dit is het BELANGRIJKSTE signaal: hier kan tijdig ingrijpen nog voorkomen dat iets te laat wordt.
+- "reedsTeLaat" = acties die al over hun datum zijn of niet meer binnen de doorlooptijd passen. Dit is herstelwerk, geen preventie.
+Open de samenvatting met de scherpste "dreigtTeLaat"-punten (waar moet deze week beslist of gestart worden), en behandel "reedsTeLaat" daarna als herstel.
+
+Belangrijk: boven jouw rapport staat al een DETERMINISTISCHE risico-radar (een volledige tabel met alle dreigt-te-laat- en reeds-te-laat-acties, inclusief uiterste startdata). Herhaal die tabel NIET regel voor regel. Jouw taak is interpreteren en prioriteren: benoem de 3-6 punten die nu om een besluit of actie vragen, met wie/wat/wanneer, en leg verbanden (bv. opeenstapeling bij één werkpakket, engineer of mijlpaal).
+
 Verplichte structuur:
 # <titel met scope en periode>
-## Samenvatting   (3-5 kernzinnen voor het management)
+## Samenvatting   (3-5 kernzinnen; open met het scherpste dreigt-te-laat-signaal)
 ## Terugblik afgelopen periode   (mijlpalen die gepland stonden en hun status; voortgangsontwikkeling indien beschikbaar)
 ## Voortgang & KPI's   (kerncijfers; gebruik een korte Markdown-tabel)
-## Risico's & kritieke punten   (kritieke/risicovolle werkpakketten en taken; betrek het risico-register (top-risico's met score) en vergunningen/ZRO die over de besluitdatum zijn)
+## Vroegsignalering — dreigt te laat   (acties die nu om een besluit/start vragen vóór hun uiterste startdatum; prioriteer, herhaal de radartabel niet)
+## Reeds te laat & blokkades   (over-datum acties, geblokkeerd/issue; betrek het risico-register (top-risico's met score) en vergunningen/ZRO die over de besluitdatum zijn)
 ## Vooruitblik komende periode   (naderende mijlpalen, openstaande vergunningen/ZRO en wat er concreet gedaan moet worden)
 ## Aanbevelingen   (3-6 puntsgewijze, actiegerichte aanbevelingen)
 
@@ -1328,6 +1358,61 @@ function markdownNaarHtml(md) {
   return html;
 }
 
+/* --------- Deterministische risico-radar (door code, niet door AI) -------- */
+// Vaste, complete tabel die altijd boven het AI-rapport verschijnt — ook als de
+// AI-service faalt. Scheidt "dreigt te laat" (vooraf, nog te voorkomen) van
+// "reeds te laat" (achteraf, herstel).
+function risicoRadarHtml(data) {
+  const vb = data.vooruitblik || {};
+  const dreigt = vb.dreigtTeLaat || [];
+  const reeds = vb.reedsTeLaat || [];
+  const ng = vb.nietGetoond || { dreigtTeLaat: 0, reedsTeLaat: 0 };
+
+  const meerRegel = (n) => n > 0 ? `<p class="radar-meer">+ nog ${n} niet getoond (drempel ${50}).</p>` : '';
+
+  const dagChip = (d) => {
+    if (d < 0) return `<span class="radar-chip acuut">${Math.abs(d)}d over</span>`;
+    if (d <= 5) return `<span class="radar-chip dringend">over ${d}d</span>`;
+    return `<span class="radar-chip">over ${d}d</span>`;
+  };
+
+  const dreigtTabel = dreigt.length ? `
+    <table class="radar-tabel">
+      <thead><tr><th>Werkpakket</th><th>Activiteit</th><th>Fase</th><th>Uiterlijk starten</th><th>Speling</th><th>Fase-einde</th></tr></thead>
+      <tbody>${dreigt.map((t) => `<tr>
+        <td>${htmlEsc(t.wp)}</td>
+        <td>${htmlEsc(t.activiteit)}</td>
+        <td>${htmlEsc(t.fase)}</td>
+        <td><strong>${htmlEsc(t.uiterlijkStarten)}</strong> ${dagChip(t.dagenTotUiterste)}</td>
+        <td>${t.spelingWd} wd</td>
+        <td>${htmlEsc(t.faseEind)}</td>
+      </tr>`).join('')}</tbody>
+    </table>${meerRegel(ng.dreigtTeLaat)}`
+    : '<p class="radar-leeg">Geen acties die dreigen te laat te worden. 👍</p>';
+
+  const reedsTabel = reeds.length ? `
+    <table class="radar-tabel">
+      <thead><tr><th>Werkpakket</th><th>Activiteit</th><th>Fase</th><th>Reden</th><th>Fase-einde</th></tr></thead>
+      <tbody>${reeds.map((t) => `<tr>
+        <td>${htmlEsc(t.wp)}</td>
+        <td>${htmlEsc(t.activiteit)}</td>
+        <td>${htmlEsc(t.fase)}</td>
+        <td>${htmlEsc(t.reden)}</td>
+        <td>${htmlEsc(t.faseEind)}</td>
+      </tr>`).join('')}</tbody>
+    </table>${meerRegel(ng.reedsTeLaat)}`
+    : '<p class="radar-leeg">Geen acties die al over hun datum zijn.</p>';
+
+  return `<div class="risico-radar">
+    <div class="radar-kop"><h3>🟠 Dreigt te laat <span class="radar-tel">${dreigt.length}${ng.dreigtTeLaat ? '+' : ''}</span></h3>
+      <span class="radar-uitleg">Nog haalbaar mits nu gestart — sorteer op uiterste startdatum.</span></div>
+    ${dreigtTabel}
+    <div class="radar-kop"><h3>🔴 Reeds te laat <span class="radar-tel">${reeds.length}${ng.reedsTeLaat ? '+' : ''}</span></h3>
+      <span class="radar-uitleg">Over datum of past niet meer binnen de doorlooptijd — herstel/ingreep nodig.</span></div>
+    ${reedsTabel}
+  </div>`;
+}
+
 /* ----------------------------- Rapport draaien --------------------------- */
 let rapportAbort = null;
 async function genereerRapport() {
@@ -1340,11 +1425,13 @@ async function genereerRapport() {
 
   const data = bouwRapportData(scope, periode.van, periode.tot, label);
 
+  const dreigtTel = data.vooruitblik.dreigtTeLaat.length + (data.vooruitblik.nietGetoond.dreigtTeLaat ? '+' : '');
+  const reedsTel = data.vooruitblik.reedsTeLaat.length + (data.vooruitblik.nietGetoond.reedsTeLaat ? '+' : '');
   el('#rapMetricPreview').innerHTML = [
     ['Werkpakketten', data.kerncijfers.werkpakketten],
     ['Gem. voortgang', data.kerncijfers.gemVoortgangPct + '%'],
-    ['Kritieke WP’s', data.kerncijfers.kritiekeWerkpakketten],
-    ['Risico WP’s', data.kerncijfers.risicoWerkpakketten],
+    ['Dreigt te laat', dreigtTel],
+    ['Reeds te laat', reedsTel],
     ['Mijlpalen in periode', data.terugblik.mijlpalenInPeriode.length],
     ['Mijlpalen vooruit', data.vooruitblik.naderendeMijlpalen.length],
   ].map(([l, v]) => `<div class="mp"><b>${v}</b><span>${l}</span></div>`).join('');
@@ -1354,6 +1441,8 @@ async function genereerRapport() {
   knop.disabled = true;
   status.innerHTML = '<span class="spinner"></span> Rapportage genereren met ' + State.model() + '…';
   el('#rapportUitvoerKaart').style.display = 'block';
+  // Deterministische radar eerst tonen — altijd compleet, ook als de AI faalt.
+  el('#rapportRadar').innerHTML = risicoRadarHtml(data);
   const doc = el('#rapportDoc');
   doc.innerHTML = '<p class="hint">Bezig met schrijven…</p>';
 
