@@ -466,6 +466,8 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .radar-chip.acuut{background:var(--rood-soft);border-color:var(--rood);color:#991b1b;font-weight:600}
 .radar-leeg{font-size:13px;color:var(--sub);margin:2px 0 6px}
 .radar-meer{font-size:11.5px;color:var(--sub);margin:2px 0 6px;font-style:italic}
+/* In het dashboard zit de radar al in een .card → geen dubbel kader. */
+#dashRadar .risico-radar{border:0;background:transparent;padding:0;max-width:none;margin:0}
 
 .metric-preview{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0}
 .metric-preview .mp{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:11px 13px}

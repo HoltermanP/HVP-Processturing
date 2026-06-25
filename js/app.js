@@ -1031,6 +1031,12 @@ function renderDashboard() {
     : '<li class="leeg">Geen kritieke punten. 👍</li>';
   els('#rapKritiek li[data-wp]').forEach((li) => li.addEventListener('click', () => openDetail(li.dataset.wp)));
 
+  // Risico-radar: zelfde deterministische lijsten als in de rapportage.
+  const radarHorizon = new Date(VANDAAG); radarHorizon.setDate(radarHorizon.getDate() + 90);
+  const radarLijsten = bouwRisicoLijsten(wps, radarHorizon);
+  el('#dashRadarTitel').innerHTML = `Risico-radar <span class="tel">${radarLijsten.dreigtTeLaat.length}${radarLijsten.nietGetoond.dreigtTeLaat ? '+' : ''} dreigt · ${radarLijsten.reedsTeLaat.length}${radarLijsten.nietGetoond.reedsTeLaat ? '+' : ''} te laat</span>`;
+  el('#dashRadar').innerHTML = risicoRadarHtml(radarLijsten);
+
   const engs = {};
   wps.forEach((w) => {
     const e = w.engineer || '—';
@@ -1197,6 +1203,46 @@ function renderRapportenControls() {
     projecten.map((p) => `<option value="${htmlEsc(p)}">${htmlEsc(p)}</option>`).join('');
 }
 
+/* ----- Risicolijsten: 'dreigt te laat' (vooraf) vs 'reeds te laat' ------- */
+// Gedeeld door de rapportage én het dashboard. Levert deterministische lijsten
+// op activiteit-niveau, gesorteerd op urgentie, met een cap + 'niet getoond'-teller.
+function bouwRisicoLijsten(wps, horizonTot, cap = 50) {
+  const taken = komendeTaken(wps, horizonTot);
+
+  // Reeds te laat (achteraf-signaal): fase is over de einddatum, de activiteit is
+  // geblokkeerd/issue, of de doorlooptijd past objectief niet meer vóór de einddatum.
+  const reedsAlle = taken.filter((t) => t.ernst >= 3).sort((a, b) => a.faseEind - b.faseEind);
+  const reedsTeLaat = reedsAlle.slice(0, cap).map((t) => ({
+    wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`,
+    fase: t.fase.naam,
+    reden: t.overtijd ? 'fase over einddatum'
+      : (t.status === 'geblokkeerd' || t.status === 'issue') ? t.status
+      : 'doorlooptijd past niet meer',
+    faseEind: fmtDatum(t.faseEind),
+  }));
+
+  // Dreigt te laat (vooraf-signaal): nog haalbaar, MITS nu gestart. De uiterste
+  // startdatum (latestStart = einddatum − doorlooptijd) is bereikt of nadert; de
+  // speling raakt op. Gesorteerd op meest dringende uiterste startdatum.
+  const dreigtAlle = taken.filter((t) => t.ernst === 2).sort((a, b) => a.latestStart - b.latestStart);
+  const dreigtTeLaat = dreigtAlle.slice(0, cap).map((t) => ({
+    wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`,
+    fase: t.fase.naam,
+    uiterlijkStarten: fmtDatum(t.latestStart),
+    dagenTotUiterste: dagenVerschil(VANDAAG, t.latestStart),
+    spelingWd: t.speling,
+    faseEind: fmtDatum(t.faseEind),
+  }));
+
+  return {
+    reedsTeLaat, dreigtTeLaat,
+    nietGetoond: {
+      reedsTeLaat: Math.max(0, reedsAlle.length - reedsTeLaat.length),
+      dreigtTeLaat: Math.max(0, dreigtAlle.length - dreigtTeLaat.length),
+    },
+  };
+}
+
 /* --------------- Rapport: bereken cijfers (terug- & vooruit) ------------- */
 function bouwRapportData(scope, van, tot, label) {
   const wps = scope === 'portfolio' ? State.werkpakketten : State.werkpakketten.filter((w) => w.project === scope);
@@ -1237,37 +1283,7 @@ function bouwRapportData(scope, van, tot, label) {
   }));
   mpKomend.sort((a, b) => a.dagen - b.dagen);
 
-  const taken = komendeTaken(wps, horizonTot);
-  const RISICO_CAP = 50;
-
-  // Reeds te laat (achteraf-signaal): fase is over de einddatum, de activiteit is
-  // geblokkeerd/issue, of de doorlooptijd past objectief niet meer vóór de einddatum.
-  const reedsAlle = taken.filter((t) => t.ernst >= 3).sort((a, b) => a.faseEind - b.faseEind);
-  const reedsTeLaat = reedsAlle.slice(0, RISICO_CAP).map((t) => ({
-    wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`,
-    fase: t.fase.naam,
-    reden: t.overtijd ? 'fase over einddatum'
-      : (t.status === 'geblokkeerd' || t.status === 'issue') ? t.status
-      : 'doorlooptijd past niet meer',
-    faseEind: fmtDatum(t.faseEind),
-  }));
-
-  // Dreigt te laat (vooraf-signaal): nog haalbaar, MITS nu gestart. De uiterste
-  // startdatum (latestStart = einddatum − doorlooptijd) is bereikt of nadert; de
-  // speling raakt op. Gesorteerd op meest dringende uiterste startdatum.
-  const dreigtAlle = taken.filter((t) => t.ernst === 2).sort((a, b) => a.latestStart - b.latestStart);
-  const dreigtTeLaat = dreigtAlle.slice(0, RISICO_CAP).map((t) => ({
-    wp: `${t.wp.project} · ${t.wp.wp}`, activiteit: `${t.activiteit.code} ${t.activiteit.naam}`,
-    fase: t.fase.naam,
-    uiterlijkStarten: fmtDatum(t.latestStart),
-    dagenTotUiterste: dagenVerschil(VANDAAG, t.latestStart),
-    spelingWd: t.speling,
-    faseEind: fmtDatum(t.faseEind),
-  }));
-  const nietGetoond = {
-    reedsTeLaat: Math.max(0, reedsAlle.length - reedsTeLaat.length),
-    dreigtTeLaat: Math.max(0, dreigtAlle.length - dreigtTeLaat.length),
-  };
+  const { reedsTeLaat, dreigtTeLaat, nietGetoond } = bouwRisicoLijsten(wps, horizonTot);
 
   const perProject = [...new Set(wps.map((w) => w.project))].sort().map((p) => {
     const ps = statsVoor(wps.filter((w) => w.project === p));
@@ -1362,11 +1378,10 @@ function markdownNaarHtml(md) {
 // Vaste, complete tabel die altijd boven het AI-rapport verschijnt — ook als de
 // AI-service faalt. Scheidt "dreigt te laat" (vooraf, nog te voorkomen) van
 // "reeds te laat" (achteraf, herstel).
-function risicoRadarHtml(data) {
-  const vb = data.vooruitblik || {};
-  const dreigt = vb.dreigtTeLaat || [];
-  const reeds = vb.reedsTeLaat || [];
-  const ng = vb.nietGetoond || { dreigtTeLaat: 0, reedsTeLaat: 0 };
+function risicoRadarHtml(lijsten) {
+  const dreigt = lijsten.dreigtTeLaat || [];
+  const reeds = lijsten.reedsTeLaat || [];
+  const ng = lijsten.nietGetoond || { dreigtTeLaat: 0, reedsTeLaat: 0 };
 
   const meerRegel = (n) => n > 0 ? `<p class="radar-meer">+ nog ${n} niet getoond (drempel ${50}).</p>` : '';
 
@@ -1442,7 +1457,7 @@ async function genereerRapport() {
   status.innerHTML = '<span class="spinner"></span> Rapportage genereren met ' + State.model() + '…';
   el('#rapportUitvoerKaart').style.display = 'block';
   // Deterministische radar eerst tonen — altijd compleet, ook als de AI faalt.
-  el('#rapportRadar').innerHTML = risicoRadarHtml(data);
+  el('#rapportRadar').innerHTML = risicoRadarHtml(data.vooruitblik);
   const doc = el('#rapportDoc');
   doc.innerHTML = '<p class="hint">Bezig met schrijven…</p>';
 
