@@ -1519,15 +1519,14 @@ STUUR PROACTIEF, NIET ACHTERAF. De data bevat twee gescheiden risicocategorieën
 - "reedsTeLaat" = acties die al over hun datum zijn of niet meer binnen de doorlooptijd passen. Dit is herstelwerk, geen preventie.
 Open de samenvatting met de scherpste "dreigtTeLaat"-punten (waar moet deze week beslist of gestart worden), en behandel "reedsTeLaat" daarna als herstel.
 
-Belangrijk: boven jouw rapport staat al een DETERMINISTISCHE risico-radar (een volledige tabel met alle dreigt-te-laat- en reeds-te-laat-acties, inclusief uiterste startdata). Herhaal die tabel NIET regel voor regel. Jouw taak is interpreteren en prioriteren: benoem de 3-6 punten die nu om een besluit of actie vragen, met wie/wat/wanneer, en leg verbanden (bv. opeenstapeling bij één werkpakket, engineer of mijlpaal).
+OPMAAK. Het rapport wordt als opgemaakt HTML-document getoond; boven jouw tekst staat al een rapportkop met titel, scope, periode en KPI-tegels. Begin daarom DIRECT met "## Samenvatting" — geen eigen #-titel, geen herhaling van de kerncijfers als losse opsomming. Gebruik nette, compacte Markdown-tabellen waar dat het rapport sterker maakt (kerncijfers, mijlpalen, acties): maximaal ± 8 rijen per tabel, selecteer de belangrijkste en benoem hoeveel er nog meer zijn. Interpreteer en prioriteer: benoem bij de vroegsignalering de 3-6 acties die nu om een besluit of start vragen (met uiterste startdatum) en leg verbanden (opeenstapeling bij één werkpakket, engineer of mijlpaal).
 
 Verplichte structuur:
-# <titel met scope en periode>
 ## Samenvatting   (3-5 kernzinnen; open met het scherpste dreigt-te-laat-signaal)
 ## Terugblik afgelopen periode   (mijlpalen die gepland stonden en hun status; voortgangsontwikkeling indien beschikbaar)
 ## Voortgang & KPI's   (kerncijfers; gebruik een korte Markdown-tabel)
 ## Financiën — TSB, uren & kosten   (ALLEEN als het veld "tsb" in de data gevuld is: begroot versus besteed in uren en euro's per project, opvallende over-/onderschrijdingen (pctBesteedBedrag > 100 = overschrijding) en wat dat betekent voor de sturing; laat deze sectie anders volledig weg)
-## Vroegsignalering — dreigt te laat   (acties die nu om een besluit/start vragen vóór hun uiterste startdatum; prioriteer, herhaal de radartabel niet)
+## Vroegsignalering — dreigt te laat   (acties die nu om een besluit/start vragen vóór hun uiterste startdatum; als tabel met uiterste startdatum en fase-einde, geprioriteerd)
 ## Reeds te laat & blokkades   (over-datum acties, geblokkeerd/issue; betrek het risico-register (top-risico's met score) en vergunningen/ZRO die over de besluitdatum zijn)
 ## Vooruitblik komende periode   (naderende mijlpalen, openstaande vergunningen/ZRO en wat er concreet gedaan moet worden)
 ## Aanbevelingen   (3-6 puntsgewijze, actiegerichte aanbevelingen)
@@ -1634,6 +1633,83 @@ function risicoRadarHtml(lijsten) {
   </div>`;
 }
 
+/* ------------------- Rapportkop + standalone HTML-export ------------------ */
+// Opgemaakte kop boven het rapport: titel, meta en KPI-tegels uit de data.
+function rapportKopHtml(data) {
+  const scopeNaam = data.scope === 'portfolio' ? 'Hele portfolio' : data.scope;
+  const titel = data.label.charAt(0).toUpperCase() + data.label.slice(1);
+  const dreigt = data.vooruitblik.dreigtTeLaat.length + (data.vooruitblik.nietGetoond.dreigtTeLaat ? '+' : '');
+  const reeds = data.vooruitblik.reedsTeLaat.length + (data.vooruitblik.nietGetoond.reedsTeLaat ? '+' : '');
+  const tegel = (val, label, cls = '') => `<div class="rk-kpi ${cls}"><b>${val}</b><span>${htmlEsc(label)}</span></div>`;
+  let tegels = [
+    tegel(data.kerncijfers.werkpakketten, 'werkpakketten'),
+    tegel(data.kerncijfers.gemVoortgangPct + '%', 'gem. voortgang', 'groen'),
+    tegel(data.kerncijfers.kritiekeWerkpakketten, 'kritiek', data.kerncijfers.kritiekeWerkpakketten ? 'rood' : ''),
+    tegel(dreigt, 'dreigt te laat', 'amber'),
+    tegel(reeds, 'reeds te laat', 'rood'),
+    tegel(data.terugblik.mijlpalenInPeriode.length, 'mijlpalen in periode'),
+  ].join('');
+  if (data.tsb && data.tsb.totalen) {
+    const fmtK = (n) => '€ ' + Math.round(n).toLocaleString('nl-NL');
+    const pct = data.tsb.totalen.begrootBedrag ? Math.round((data.tsb.totalen.totaalBesteed / data.tsb.totalen.begrootBedrag) * 100) : null;
+    tegels += tegel(fmtK(data.tsb.totalen.begrootBedrag), 'begroot (TSB)')
+      + tegel(fmtK(data.tsb.totalen.totaalBesteed) + (pct != null ? ` · ${pct}%` : ''), 'besteed', pct != null && pct > 100 ? 'rood' : 'groen')
+      + tegel(fmtK(data.tsb.totalen.restbudget), 'restbudget', data.tsb.totalen.restbudget < 0 ? 'rood' : '');
+  }
+  return `<div class="rapport-kop">
+      <div class="rk-brand"><div class="rk-logo">HVP</div>
+        <div><h1 class="rk-titel">${htmlEsc(titel)}</h1>
+        <div class="rk-sub">${htmlEsc(scopeNaam)} · ${htmlEsc(data.periode.van)} t/m ${htmlEsc(data.periode.tot)} · peildatum ${htmlEsc(data.peildatum)}</div></div></div>
+      <div class="rk-meta">Procesturing — Bouwteamfase Nulelie<br>gegenereerd ${new Date().toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+    </div>
+    <div class="rk-kpis">${tegels}</div>`;
+}
+
+// Zelfstandig HTML-bestand (inline CSS) — deelbaar per mail/SharePoint.
+function rapportStandaloneHtml(titel, inhoudHtml) {
+  const css = `
+    :root{--accent:#2563eb;--accent-dark:#1e3a8a;--ink:#0f172a;--ink-2:#334155;--sub:#64748b;--line:#e4e9f0;--panel-2:#f8fafc;--groen:#10b981;--amber:#f59e0b;--rood:#ef4444}
+    *{box-sizing:border-box}body{margin:0;background:#eef2f7;font-family:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink-2);font-size:14px;line-height:1.65}
+    .vel{max-width:860px;margin:28px auto;background:#fff;border:1px solid var(--line);border-radius:16px;padding:36px 44px;box-shadow:0 6px 24px rgba(15,23,42,.08)}
+    .rapport-kop{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;background:linear-gradient(120deg,#172554,#1d4ed8 60%,#2563eb);color:#fff;border-radius:14px;padding:22px 26px;margin-bottom:14px}
+    .rk-brand{display:flex;gap:14px;align-items:center}
+    .rk-logo{background:linear-gradient(160deg,#fff,#dbeafe);color:#1d4ed8;font-weight:800;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:15px}
+    .rk-titel{margin:0;font-size:21px;font-weight:700;color:#fff;letter-spacing:-.01em}
+    .rk-sub{font-size:12.5px;color:#c7d2fe;margin-top:3px}
+    .rk-meta{font-size:11.5px;color:#c7d2fe;text-align:right;line-height:1.5}
+    .rk-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin:0 0 26px}
+    .rk-kpi{background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:10px 13px}
+    .rk-kpi b{display:block;font-size:17px;font-weight:750;color:var(--ink)}
+    .rk-kpi span{font-size:10.5px;color:var(--sub);font-weight:600}
+    .rk-kpi.groen b{color:#047857}.rk-kpi.amber b{color:#b45309}.rk-kpi.rood b{color:#b91c1c}
+    h1{font-size:24px;color:var(--ink);margin:0 0 4px}
+    h2{font-size:17px;color:var(--accent-dark);margin:28px 0 10px;padding:0 0 7px;border-bottom:2px solid var(--line);letter-spacing:-.01em}
+    h3{font-size:14.5px;color:var(--ink);margin:18px 0 6px}
+    p{margin:0 0 12px}ul,ol{margin:0 0 14px;padding-left:22px}li{margin-bottom:5px}
+    strong{color:var(--ink);font-weight:650}code{background:#eef2f7;padding:1px 6px;border-radius:6px;font-size:.85em}
+    table{width:100%;border-collapse:collapse;margin:0 0 16px;font-size:12.5px}
+    th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+    th{background:var(--panel-2);font-weight:650;color:var(--ink)}
+    tbody tr:nth-child(even){background:#fbfcfe}
+    hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+    .rapport-meta{color:var(--sub);font-size:12px;margin-bottom:18px}
+    @media print{body{background:#fff}.vel{border:0;box-shadow:none;margin:0;max-width:none;padding:0}
+      .rapport-kop{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+  return `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEsc(titel)}</title><style>${css}</style></head><body><div class="vel">${inhoudHtml}</div></body></html>`;
+}
+
+function downloadRapportHtml() {
+  const doc = el('#rapportDoc');
+  if (!doc || !doc.innerHTML.trim()) { toast('Genereer eerst een rapportage', 'fout'); return; }
+  const titel = doc._titel || 'rapportage';
+  const blob = new Blob([rapportStandaloneHtml(titel, doc.innerHTML)], { type: 'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${titel.toLowerCase().replace(/[^\w]+/g, '-')}-${isoDatum(new Date())}.html`;
+  a.click();
+  toast('Rapportage gedownload als HTML', 'ok');
+}
+
 /* ----------------------------- Rapport draaien --------------------------- */
 let rapportAbort = null;
 async function genereerRapport() {
@@ -1662,10 +1738,13 @@ async function genereerRapport() {
   knop.disabled = true;
   status.innerHTML = '<span class="spinner"></span> Rapportage genereren met ' + State.model() + '…';
   el('#rapportUitvoerKaart').style.display = 'block';
-  // Deterministische radar eerst tonen — altijd compleet, ook als de AI faalt.
-  el('#rapportRadar').innerHTML = risicoRadarHtml(data.vooruitblik);
   const doc = el('#rapportDoc');
-  doc.innerHTML = '<p class="hint">Bezig met schrijven…</p>';
+  // Opgemaakte rapportkop (titel + KPI-tegels) staat er direct; de AI-tekst
+  // streamt daaronder binnen.
+  const kop = rapportKopHtml(data);
+  doc._titel = `${label} — ${scope === 'portfolio' ? 'portfolio' : scope}`;
+  doc.innerHTML = kop + '<p class="hint">Bezig met schrijven…</p>';
+  doc.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   if (rapportAbort) rapportAbort.abort();
   rapportAbort = new AbortController();
@@ -1673,14 +1752,16 @@ async function genereerRapport() {
   try {
     const tekst = await AI.genereer({
       system, prompt, model: State.model(), signal: rapportAbort.signal,
-      onDelta: (vol) => { doc.innerHTML = markdownNaarHtml(vol); },
+      onDelta: (vol) => { doc.innerHTML = kop + markdownNaarHtml(vol); },
     });
-    doc.innerHTML = `<div class="rapport-meta">Gegenereerd op ${new Date().toLocaleString('nl-NL')} · model ${State.model()} · scope ${scope === 'portfolio' ? 'hele portfolio' : scope}</div>` + markdownNaarHtml(tekst);
-    status.innerHTML = '<span style="color:#047857;font-weight:600">✓ Rapportage gereed.</span>';
+    doc.innerHTML = kop
+      + markdownNaarHtml(tekst)
+      + `<div class="rapport-meta" style="margin-top:22px">Gegenereerd op ${new Date().toLocaleString('nl-NL')} · model ${State.model()} · HVP Procesturing</div>`;
+    status.innerHTML = '<span style="color:#047857;font-weight:600">✓ Rapportage gereed — download als HTML of print naar PDF.</span>';
     doc._tekst = tekst;
   } catch (e) {
     status.innerHTML = '';
-    doc.innerHTML = `<div class="ai-waarsch">⚠️ <div><strong>Kon de rapportage niet genereren.</strong><br>${htmlEsc(e.message)}<br><span class="hint">Stel <code>ANTHROPIC_API_KEY</code> in als environment variable in Vercel. Lokaal (zonder Vercel) is de AI-service niet beschikbaar; de berekende cijfers hierboven werken wel.</span></div></div>`;
+    doc.innerHTML = kop + `<div class="ai-waarsch">⚠️ <div><strong>Kon de rapportage niet genereren.</strong><br>${htmlEsc(e.message)}<br><span class="hint">Stel <code>ANTHROPIC_API_KEY</code> in als environment variable in Vercel. Lokaal (zonder Vercel) is de AI-service niet beschikbaar; de berekende cijfers hierboven werken wel.</span></div></div>`;
   } finally {
     knop.disabled = false;
   }
@@ -1834,6 +1915,7 @@ async function init() {
 
   el('#rapType').addEventListener('change', renderRapportenControls);
   el('#rapGenereer').addEventListener('click', genereerRapport);
+  el('#rapDownload').addEventListener('click', downloadRapportHtml);
   el('#rapPrint').addEventListener('click', () => window.print());
   el('#rapKopieer').addEventListener('click', () => {
     const t = el('#rapportDoc')._tekst || el('#rapportDoc').innerText;

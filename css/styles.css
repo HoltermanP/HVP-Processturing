@@ -490,11 +490,30 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .rapport-doc ul,.rapport-doc ol{margin:0 0 14px;padding-left:22px}
 .rapport-doc li{margin-bottom:5px}
 .rapport-doc strong{color:var(--ink);font-weight:650}
-.rapport-doc table{width:100%;border-collapse:collapse;margin:0 0 16px;font-size:13px}
-.rapport-doc th,.rapport-doc td{border:1px solid var(--line);padding:8px 11px;text-align:left}
-.rapport-doc th{background:var(--panel-2);font-weight:650}
+.rapport-doc table{width:100%;border-collapse:collapse;margin:0 0 16px;font-size:12.5px}
+.rapport-doc th,.rapport-doc td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+.rapport-doc th{background:var(--panel-2);font-weight:650;color:var(--ink)}
+.rapport-doc tbody tr:nth-child(even){background:#fbfcfe}
 .rapport-doc hr{border:0;border-top:1px solid var(--line);margin:22px 0}
 .rapport-meta{color:var(--sub);font-size:12.5px;margin-bottom:18px}
+
+/* Rapportkop (titelblok + KPI-tegels) — ook gebruikt in de HTML-download */
+.rapport-kop{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;
+  background:linear-gradient(120deg,#172554,#1d4ed8 60%,#2563eb);color:#fff;
+  border-radius:14px;padding:22px 26px;margin-bottom:14px;
+}
+.rk-brand{display:flex;gap:14px;align-items:center}
+.rk-logo{background:linear-gradient(160deg,#fff,#dbeafe);color:#1d4ed8;font-weight:800;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:15px;flex:0 0 auto}
+.rk-titel{margin:0;font-size:21px;font-weight:700;color:#fff;letter-spacing:-.01em}
+.rk-sub{font-size:12.5px;color:#c7d2fe;margin-top:3px}
+.rk-meta{font-size:11.5px;color:#c7d2fe;text-align:right;line-height:1.5}
+.rk-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin:0 0 26px}
+.rk-kpi{background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:10px 13px}
+.rk-kpi b{display:block;font-size:17px;font-weight:750;color:var(--ink)}
+.rk-kpi span{font-size:10.5px;color:var(--sub);font-weight:600}
+.rk-kpi.groen b{color:#047857}.rk-kpi.amber b{color:#b45309}.rk-kpi.rood b{color:#b91c1c}
+@media print{.rapport-kop{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 
 /* ----------------- Deterministische risico-radar ------------------ */
 .risico-radar{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 24px;max-width:840px;margin:0 auto 18px}
