@@ -1010,15 +1010,149 @@ function renderTsbFormatEditor(node, f) {
   }));
 }
 
+/* --------------- Koppeling planningsfase ↔ TSB-fase (VO/DO/UO) ----------- */
+// Volgnummer van een TSB-fase: 0=VO, 1=DO, 2=UO (op naam/code, anders positie).
+function tsbFaseVolgnr(fase, positie) {
+  const blob = `${fase.naam || ''} ${fase.code || ''}`.toUpperCase();
+  if (/\bVO\b|402010/.test(blob)) return 0;
+  if (/\bDO\b|402020/.test(blob)) return 1;
+  if (/\bUO\b|402030/.test(blob)) return 2;
+  return Math.min(positie, 2);
+}
+// Volgnummer van een planningsfase (Analysefase telt bij VO, Contractfase bij UO).
+function planningFaseVolgnr(fase) {
+  const naam = (fase && fase.naam || '').toUpperCase();
+  if (naam.includes('ANALYSE')) return 0;
+  if (naam.includes('VO')) return 0;
+  if (naam.includes('DO')) return 1;
+  if (naam.includes('UO') || naam.includes('CONTRACT')) return 2;
+  return 0;
+}
+// Dominante planningsfase van een project: waar de meeste werkpakketten zitten.
+function tsbDominanteFase(projectNaam) {
+  const wps = State.werkpakketten.filter((w) => w.project === projectNaam);
+  if (!wps.length || typeof huidigeFase !== 'function') return null;
+  const teller = new Map();
+  let gereedTotaal = 0, pctSom = 0;
+  wps.forEach((w) => {
+    const hf = huidigeFase(w);
+    if (hf.fase) {
+      const key = hf.status === 'afgerond' ? '__afgerond' : hf.fase.id;
+      teller.set(key, (teller.get(key) || 0) + 1);
+    }
+    if (typeof activiteitVoortgang === 'function') { pctSom += activiteitVoortgang(w).pct; gereedTotaal++; }
+  });
+  if (!teller.size) return null;
+  const [topKey] = [...teller.entries()].sort((a, b) => b[1] - a[1])[0];
+  const afgerond = topKey === '__afgerond';
+  const fase = afgerond ? FASES[FASES.length - 1] : FASES.find((f) => f.id === topKey);
+  return {
+    fase, afgerond,
+    volgnr: afgerond ? 2 : planningFaseVolgnr(fase),
+    aantalWps: wps.length,
+    voortgangPct: gereedTotaal ? Math.round(pctSom / gereedTotaal) : null,
+  };
+}
+
+/* ------------- Dashboard: kosten per km tracé (planning ↔ TSB) ----------- */
+function renderDashTsbKm(projecten) {
+  const node = el('#dashTsbKm'); if (!node) return false;
+  const rijen = [];
+  const zonderTrace = [];
+  projecten.forEach((tp) => {
+    const wps = State.werkpakketten.filter((w) => w.project === tp.projectNaam);
+    const meters = wps.reduce((s, w) => s + (+w.lengteNieuw || 0), 0);
+    if (!meters) { zonderTrace.push(tp.projectNaam); return; }
+    const c = tsbProjectCijfers(tp, null);
+    const dom = tsbDominanteFase(tp.projectNaam);
+    rijen.push({
+      naam: tp.projectNaam, km: meters / 1000,
+      begrootKm: c.begroting.totaal.bedrag / (meters / 1000),
+      besteedKm: c.werkelijk.kosten / (meters / 1000),
+      voortgang: dom ? dom.voortgangPct : null,
+    });
+  });
+  if (!rijen.length) {
+    node.innerHTML = `<div class="leeg">Geen TSB-projecten met tracémeters in de planning.${zonderTrace.length ? `<br><span class="hint">Zonder koppeling: ${zonderTrace.map(htmlEsc).join(', ')}</span>` : ''}</div>`;
+    return true;
+  }
+  rijen.sort((a, b) => b.begrootKm - a.begrootKm);
+  const max = Math.max(...rijen.map((r) => Math.max(r.begrootKm, r.besteedKm)), 1);
+  node.innerHTML = rijen.map((r) => `
+    <div class="vp-rij">
+      <div class="vp-kop"><span class="vp-naam">${htmlEsc(r.naam)} <span class="hint">· ${r.km.toLocaleString('nl-NL', { maximumFractionDigits: 1 })} km</span></span>
+        <span class="vp-pct">${fmtGeld(r.begrootKm)}<small style="font-weight:500;color:var(--sub)">/km begroot</small></span></div>
+      <div class="statbar" style="height:10px;margin-bottom:4px" title="Begroot per km"><span class="stseg" style="width:${(r.begrootKm / max * 100).toFixed(1)}%;background:var(--accent)"></span></div>
+      <div class="statbar" style="height:10px" title="Besteed per km (tot nu toe)"><span class="stseg" style="width:${(r.besteedKm / max * 100).toFixed(1)}%;background:${r.besteedKm > r.begrootKm ? 'var(--rood)' : 'var(--groen)'}"></span></div>
+      <div class="vp-meta">besteed tot nu: <strong>${fmtGeld(r.besteedKm)}/km</strong>${r.voortgang != null ? ` · voortgang ${r.voortgang}% — besteed/km loopt op tot het project gereed is` : ''}</div>
+    </div>`).join('')
+    + `<div class="legenda" style="margin-top:10px"><span class="leg"><i style="background:var(--accent)"></i>begroot per km</span><span class="leg"><i style="background:var(--groen)"></i>besteed per km (tot nu)</span></div>`
+    + (zonderTrace.length ? `<p class="hint" style="margin:8px 0 0">Zonder tracékoppeling in de planning: ${zonderTrace.map(htmlEsc).join(', ')}.</p>` : '');
+  return true;
+}
+
+/* --------- Dashboard: fasebewaking budget (fase ↔ TSB-fasebudget) -------- */
+function renderDashTsbFase(projecten) {
+  const node = el('#dashTsbFase'); if (!node) return false;
+  const rijen = [];
+  const zonderKoppeling = [];
+  projecten.forEach((tp) => {
+    const dom = tsbDominanteFase(tp.projectNaam);
+    if (!dom || !dom.fase) { zonderKoppeling.push(tp.projectNaam); return; }
+    const c = tsbProjectCijfers(tp, null);
+    // Budget beschikbaar t/m de fase waarin het project (dominant) zit.
+    let beschikbaar = 0;
+    (tp.fasen || []).forEach((f, i) => { if (tsbFaseVolgnr(f, i) <= dom.volgnr) beschikbaar += c.begroting.fasen[i].bedrag; });
+    const besteed = c.werkelijk.kosten;
+    const pct = beschikbaar > 0 ? Math.round((besteed / beschikbaar) * 100) : null;
+    let chip, chipCls;
+    if (beschikbaar <= 0) { chip = 'geen fasebudget'; chipCls = ''; }
+    else if (besteed > beschikbaar) { chip = `${fmtGeld(besteed - beschikbaar)} over budget t/m fase`; chipCls = 'rood'; }
+    else if (pct >= 90) { chip = `nadert fasebudget (${pct}%)`; chipCls = 'amber'; }
+    else { chip = `binnen fasebudget (${pct}%)`; chipCls = 'groen'; }
+    rijen.push({ tp, dom, beschikbaar, besteed, pct, chip, chipCls });
+  });
+  if (!rijen.length) {
+    node.innerHTML = `<div class="leeg">Geen TSB-projecten met een fase uit de planning.${zonderKoppeling.length ? `<br><span class="hint">Zonder koppeling: ${zonderKoppeling.map(htmlEsc).join(', ')}</span>` : ''}</div>`;
+    return true;
+  }
+  rijen.sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
+  node.innerHTML = rijen.map((r) => {
+    const kleur = r.dom.fase.kleur || 'var(--accent)';
+    const breedte = r.pct == null ? 0 : Math.min(100, r.pct);
+    return `<div class="tsb-burn" data-tsb="${htmlEsc(r.tp.id)}" tabindex="0" role="button" title="Klik voor TSB-sturing">
+      <div class="vp-kop">
+        <span class="vp-naam">${htmlEsc(r.tp.projectNaam)}
+          <span class="fase-pill" style="--c:${kleur};margin-left:6px;font-size:10.5px;padding:2px 9px">${htmlEsc(r.dom.afgerond ? 'Afgerond' : r.dom.fase.naam)}</span></span>
+        <span class="chip ${r.chipCls}">${htmlEsc(r.chip)}</span></div>
+      <div class="statbar"><span class="stseg" style="width:${breedte}%;background:${r.chipCls === 'rood' ? 'var(--rood)' : r.chipCls === 'amber' ? 'var(--amber)' : 'var(--groen)'}"></span></div>
+      <div class="vp-meta">${fmtGeld(r.besteed)} besteed van ${fmtGeld(r.beschikbaar)} TSB-budget t/m deze fase · totaal begroot ${fmtGeld(tsbBerekenBegroting(r.tp).totaal.bedrag)}${r.dom.voortgangPct != null ? ` · voortgang ${r.dom.voortgangPct}%` : ''}</div>
+    </div>`;
+  }).join('')
+    + (zonderKoppeling.length ? `<p class="hint" style="margin:8px 0 0">Zonder fasekoppeling in de planning: ${zonderKoppeling.map(htmlEsc).join(', ')}.</p>` : '');
+  els('#dashTsbFase .tsb-burn').forEach((n) => {
+    const open = () => { TsbUI.tab = 'sturing'; TsbUI.scope = n.dataset.tsb; renderTsb(); toonTab('tsb'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    n.addEventListener('click', open);
+    n.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  });
+  return true;
+}
+
 /* ----------------------- Dashboard-kaart (hoofdtab) ---------------------- */
 function renderDashboardTsb() {
   const kaart = el('#dashTsbKaart'); if (!kaart) return;
+  const extra = el('#dashTsbExtra');
   const d = tsbData();
   const scope = State.dashScope;
   const projecten = d.projecten.filter((p) => scope === 'portfolio' || p.projectNaam === scope)
     .sort((a, b) => a.projectNaam.localeCompare(b.projectNaam));
-  if (!projecten.length) { kaart.style.display = 'none'; return; }
+  if (!projecten.length) { kaart.style.display = 'none'; if (extra) extra.style.display = 'none'; return; }
   kaart.style.display = '';
+  if (extra) {
+    extra.style.display = '';
+    renderDashTsbKm(projecten);
+    renderDashTsbFase(projecten);
+  }
   el('#dashTsb').innerHTML = projecten.map((tp) => {
     const c = tsbProjectCijfers(tp, null);
     const pct = c.pctBedrag;
