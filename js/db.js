@@ -47,6 +47,8 @@ const DB = (() => {
       toewijzingen: cache.toewijzingen || {},
       activiteitInfo: cache.activiteitInfo || {},
       tsb: cache.tsb || { formats: [], projecten: [], instellingen: {} },
+      tolgates: cache.tolgates || [],
+      tolgateInstances: cache.tolgateInstances || [],
     };
     try {
       setStatus('bezig');
@@ -66,6 +68,8 @@ const DB = (() => {
           if (d.toewijzingen) staat.toewijzingen = d.toewijzingen;
           if (d.activiteitInfo) staat.activiteitInfo = d.activiteitInfo;
           if (d.tsb) staat.tsb = d.tsb;
+          if (Array.isArray(d.tolgates)) staat.tolgates = d.tolgates;
+          if (Array.isArray(d.tolgateInstances)) staat.tolgateInstances = d.tolgateInstances;
           laatsteSync = d._bijgewerkt || new Date().toISOString();
           schrijfCache(staat);
           setStatus('online');
@@ -104,6 +108,8 @@ const DB = (() => {
           toewijzingen: staat.toewijzingen,
           activiteitInfo: staat.activiteitInfo,
           tsb: staat.tsb,
+          tolgates: staat.tolgates,
+          tolgateInstances: staat.tolgateInstances,
         }),
       });
       if (r.ok) {

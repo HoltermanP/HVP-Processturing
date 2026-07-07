@@ -62,6 +62,8 @@ const State = {
   toewijzingen: {},
   activiteitInfo: {},
   tsb: { formats: [], projecten: [], instellingen: {} },
+  tolgates: [],
+  tolgateInstances: [],
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   actiefWp: null,
   horizon: '30',
@@ -83,6 +85,11 @@ const State = {
     this.toewijzingen = staat.toewijzingen || {};
     this.activiteitInfo = staat.activiteitInfo || {};
     this.tsb = staat.tsb || { formats: [], projecten: [], instellingen: {} };
+    // Tolgate-definities: seed T1–T4 zolang er nog geen zijn vastgelegd.
+    this.tolgates = (staat.tolgates && staat.tolgates.length)
+      ? staat.tolgates
+      : JSON.parse(JSON.stringify(window.STANDAARD_TOLGATES || []));
+    this.tolgateInstances = staat.tolgateInstances || [];
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     // Verse start: ook de statussen uit de planning meeladen.
@@ -107,6 +114,8 @@ const State = {
       toewijzingen: this.toewijzingen,
       activiteitInfo: this.activiteitInfo,
       tsb: this.tsb,
+      tolgates: this.tolgates,
+      tolgateInstances: this.tolgateInstances,
     });
   },
   wpVoortgang(wpId) {
@@ -1249,6 +1258,7 @@ function renderDashboard() {
   renderTrend();
   renderTijdlijn();
   if (typeof renderDashboardTsb === 'function') renderDashboardTsb();
+  if (typeof renderDashboardTolgates === 'function') renderDashboardTolgates();
 }
 
 /* ----------------------- Dashboard: interactie & visuals ----------------- */
@@ -1858,7 +1868,7 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
@@ -1875,6 +1885,8 @@ async function init() {
         if (data.risicos) State.risicos = data.risicos;
         if (data.activiteitInfo) State.activiteitInfo = data.activiteitInfo;
         if (data.tsb) State.tsb = data.tsb;
+        if (data.tolgates) State.tolgates = data.tolgates;
+        if (data.tolgateInstances) State.tolgateInstances = data.tolgateInstances;
         State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
         toast('Werkbestand hersteld', 'ok'); toonTab('overzicht');
@@ -1899,6 +1911,8 @@ async function init() {
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
     State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = []; State.vergunningen = []; State.risicos = []; State.activiteitInfo = {};
     State.tsb = { formats: [], projecten: [], instellingen: {} };
+    State.tolgates = JSON.parse(JSON.stringify(window.STANDAARD_TOLGATES || []));
+    State.tolgateInstances = [];
     State.bewaar(); render(); toonTab('overzicht'); toast('Alles gewist', 'ok');
   });
 
