@@ -60,9 +60,11 @@ const State = {
   risicos: [],
   gebruikers: {},
   toewijzingen: {},
+  activiteitInfo: {},
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   actiefWp: null,
   horizon: '30',
+  mijnHorizon: '7',
   takenFilter: 'alle',
   vgFilter: 'alle',
   riskCel: null,
@@ -78,6 +80,7 @@ const State = {
     this.risicos = staat.risicos || [];
     this.gebruikers = staat.gebruikers || {};
     this.toewijzingen = staat.toewijzingen || {};
+    this.activiteitInfo = staat.activiteitInfo || {};
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     // Verse start: ook de statussen uit de planning meeladen.
@@ -100,6 +103,7 @@ const State = {
       risicos: this.risicos,
       gebruikers: this.gebruikers,
       toewijzingen: this.toewijzingen,
+      activiteitInfo: this.activiteitInfo,
     });
   },
   wpVoortgang(wpId) {
@@ -114,6 +118,30 @@ const State = {
 };
 
 function apdVan(w) { return (w.apd || '').trim() || '—'; }
+
+/* ----------------------- Stapondersteuning (info) ------------------------ */
+// Samengevoegde stapinfo: standaardteksten uit activiteiten.js, eventueel
+// overschreven via de Activiteitenbibliotheek (State.activiteitInfo).
+function actInfo(code) {
+  const basis = ACTIVITEIT_INDEX[code] ? ACTIVITEIT_INDEX[code].activiteit : {};
+  const over = State.activiteitInfo[code] || {};
+  return {
+    omschrijving: over.omschrijving ?? basis.omschrijving ?? '',
+    oplevering: over.oplevering ?? basis.oplevering ?? [],
+    tip: over.tip ?? basis.tip ?? '',
+    aangepast: over.omschrijving != null || over.oplevering != null || over.tip != null,
+  };
+}
+// Hulpblok bij een stap: omschrijving, op te leveren producten en tip.
+function actHulpHtml(code, { metOmschrijving = true } = {}) {
+  const info = actInfo(code);
+  const delen = [];
+  if (metOmschrijving && info.omschrijving) delen.push(`<div class="act-omschr">${htmlEsc(info.omschrijving)}</div>`);
+  if (info.oplevering.length) delen.push(`<div class="act-oplever"><span class="act-oplever-kop">📦 Op te leveren</span><ul>${
+    info.oplevering.map((o) => `<li>${htmlEsc(o)}</li>`).join('')}</ul></div>`);
+  if (info.tip) delen.push(`<div class="act-tip">💡 ${htmlEsc(info.tip)}</div>`);
+  return delen.join('');
+}
 
 /* ----------------------- Afgeleide berekeningen -------------------------- */
 function huidigeFase(wp) {
@@ -246,6 +274,7 @@ function maxErnst(sigs) { return sigs.reduce((m, s) => Math.max(m, s.ernst), 0);
 /* ----------------------- Aggregatie over WP-sets ------------------------- */
 function statsVoor(wps) {
   const meters = wps.reduce((s, w) => s + (+w.lengteNieuw || 0), 0);
+  const boringen = wps.reduce((s, w) => s + (+w.boringen || 0), 0);
   let pctSom = 0, kritiek = 0, gevaar = 0, geblok = 0, opKoers = 0;
   const faseTeller = {}; let volgende = null;
   wps.forEach((w) => {
@@ -261,7 +290,7 @@ function statsVoor(wps) {
     if (vm && (!volgende || vm.datum < volgende.datum)) volgende = vm;
   });
   return {
-    wps, aantal: wps.length, meters,
+    wps, aantal: wps.length, meters, boringen,
     pct: wps.length ? Math.round(pctSom / wps.length) : 0,
     kritiek, gevaar, geblok, opKoers, faseTeller, volgende,
     engineers: [...new Set(wps.map((w) => w.engineer).filter(Boolean))],
@@ -406,6 +435,7 @@ function render() {
   renderDoorlooptijden();
   renderInstellingen();
   if (typeof renderMijnProjecten === 'function') renderMijnProjecten();
+  if (typeof renderMijnTaken === 'function') renderMijnTaken();
   if (typeof renderToewijzen === 'function') renderToewijzen();
   if (typeof renderAccounts === 'function') renderAccounts();
   if (State.actiefWp) renderDetail(State.actiefWp);
@@ -761,6 +791,17 @@ function renderTaken() {
   const reset = el('#takenFilterReset');
   if (reset) reset.addEventListener('click', () => { State.takenFilter = 'alle'; renderTaken(); });
   els('#takenLijst .taak').forEach((t) => t.addEventListener('click', () => openDetail(t.dataset.wp)));
+  bindTaakHulp('#takenLijst');
+}
+
+// Klik op "ℹ︎ Wat houdt deze stap in?" klapt de stapondersteuning uit
+// zonder de detail-drawer te openen. Ook gebruikt door "Mijn projecten".
+function bindTaakHulp(containerSel) {
+  els(containerSel + ' .taak-info-knop').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = b.parentElement.querySelector('.taak-hulp').classList.toggle('open');
+    b.setAttribute('aria-expanded', open);
+  }));
 }
 
 function taakKaart(t) {
@@ -771,6 +812,7 @@ function taakKaart(t) {
     : `nog <b>${dagen}d</b> tot fase-eind`;
   const vlaggen = t.flags.map((f) => `<span class="tflag ${f}">${f}</span>`).join('');
   const stKleur = STATUSSEN[t.status].kleur;
+  const hulp = actHulpHtml(t.activiteit.code);
   return `<div class="taak ernst-${t.ernst}" data-wp="${htmlEsc(w.id)}">
     <div class="taak-hoofd">
       <div class="taak-titel"><span class="tcode">${htmlEsc(t.activiteit.code)}</span>${htmlEsc(t.activiteit.naam)}</div>
@@ -781,6 +823,7 @@ function taakKaart(t) {
         <span>doorlooptijd: <b>${t.dt} wd</b></span>
         <span>speling: <b style="color:${t.speling < 0 ? 'var(--rood)' : t.speling < 3 ? 'var(--amber)' : 'inherit'}">${t.speling} wd</b></span>
       </div>
+      ${hulp ? `<button class="taak-info-knop" type="button" aria-expanded="false">ℹ︎ Wat houdt deze stap in?</button><div class="taak-hulp">${hulp}</div>` : ''}
     </div>
     <div class="taak-rechts">
       <div class="taak-vlaggen">${vlaggen}<span class="statuschip" style="background:${stKleur}">${STATUSSEN[t.status].label}</span></div>
@@ -807,7 +850,6 @@ function renderDetail(wpId) {
   if (!w) { sluitDetail(); return; }
   const v = State.wpVoortgang(w.id);
   const hf = huidigeFase(w);
-  const av = activiteitVoortgang(w);
   el('#detailTitel').textContent = `${w.project} · ${w.wp}`;
   el('#detailSub').innerHTML = `APD ${htmlEsc(apdVan(w))} · ${htmlEsc(w.engineer || '—')} · ${htmlEsc(w.tracStart)} → ${htmlEsc(w.tracEind)} · ${(+w.lengteNieuw||0).toLocaleString('nl-NL')} m`;
   const volgende = volgendeMijlpaal(w);
@@ -818,10 +860,18 @@ function renderDetail(wpId) {
     return `<li class="${verleden ? 'past' : ''}${isNext ? ' next' : ''}"><span class="dot"></span><span class="ml">${htmlEsc(m.label)}</span><span class="md">${fmtDatum(d)}</span></li>`;
   }).join('');
   el('#detailMijlpalen').innerHTML = mij || '<li class="leeg">Geen mijlpaaldata.</li>';
-  el('#detailFaseInfo').innerHTML = hf.fase
-    ? `Huidige fase volgens planning: <strong style="color:${hf.fase.kleur}">${htmlEsc(hf.fase.naam)}</strong> <span class="badge ${hf.status==='afgerond'?'done':hf.status==='gepland'?'plan':'live'}">${hf.status}</span> · activiteit-voortgang ${av.klaar}/${av.totaal} (${av.pct}%)`
-    : 'Geen fase-informatie beschikbaar.';
   const magBew = !window.Auth || Auth.magWpBewerken(w.id);
+  renderDetailProces(w, hf, magBew);
+  el('#detailKengetallen').innerHTML = `<label class="keng-veld" for="detailBoringen">Aantal boringen
+    <input id="detailBoringen" type="number" min="0" step="1" inputmode="numeric" value="${w.boringen != null ? +w.boringen : ''}" placeholder="0"${magBew ? '' : ' disabled'}></label>`;
+  const boringenInp = el('#detailBoringen');
+  if (boringenInp && magBew) boringenInp.addEventListener('change', (e) => {
+    if (window.Auth && !Auth.magWpBewerken(w.id)) return;
+    const n = parseInt(e.target.value, 10);
+    w.boringen = Number.isFinite(n) && n >= 0 ? n : 0;
+    e.target.value = w.boringen;
+    State.bewaar(); renderDashboard();
+  });
   el('#detailRegisters').innerHTML = (magBew ? '' : leesAlleenBanner(w)) + detailRegistersHtml(w);
   bindDetailRegisters(w);
   const dis = magBew ? '' : ' disabled';
@@ -832,15 +882,16 @@ function renderDetail(wpId) {
       const cur = (v[a.code] && v[a.code].status) || 'open';
       const notitie = (v[a.code] && v[a.code].notitie) || '';
       const opts = Object.entries(STATUSSEN).map(([k, o]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${o.label}</option>`).join('');
-      return `<div class="act ${cur}">
-        <div class="act-top"><span class="act-code">${htmlEsc(a.code)}</span><span class="act-naam">${htmlEsc(a.naam)}</span>
+      return `<div class="act ${cur}" data-act="${htmlEsc(a.code)}">
+        <div class="act-top"><input type="checkbox" class="act-check" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" title="${cur === 'gereed' ? 'Afgevinkt — klik om terug te zetten' : 'Vink af als gereed'}"${cur === 'gereed' ? ' checked' : ''}${dis}>
+        <span class="act-code">${htmlEsc(a.code)}</span><span class="act-naam">${htmlEsc(a.naam)}</span>
         <select class="act-status" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" style="--c:${STATUSSEN[cur].kleur}"${dis}>${opts}</select></div>
-        <div class="act-omschr">${htmlEsc(a.omschrijving)}</div>
+        ${actHulpHtml(a.code)}
         <input class="act-notitie" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(a.code)}" placeholder="Notitie / actie…" value="${htmlEsc(notitie)}"${dis}></div>`;
     }).join('');
     const sch = faseSchema(w, f);
     const budget = sch ? `<div class="fbudget ${sch.overschrijding ? 'krap' : ''}">Venster ${fmtDatum(sch.start)} → ${fmtDatum(sch.eind)} · <strong>${sch.beschikbaar}</strong> werkdagen beschikbaar · som doorlooptijden <strong>${sch.benodigd}</strong> wd ${sch.overschrijding ? '<span class="waarsch">parallel werk nodig</span>' : '<span class="ok">ruim</span>'}</div>` : '';
-    return `<details class="fblock"${open}>
+    return `<details class="fblock" data-fase="${f.id}"${open}>
       <summary style="--c:${f.kleur}"><span class="fnaam">${htmlEsc(f.code)} ${htmlEsc(f.naam)}</span>
         <span class="fbar"><span style="width:${fv.pct}%;background:${f.kleur}"></span></span><span class="fpct">${fv.klaar}/${fv.totaal}</span></summary>
       <div class="fomschr">${htmlEsc(f.omschrijving)}</div>${budget}${items}</details>`;
@@ -851,12 +902,97 @@ function renderDetail(wpId) {
     State.wpVoortgang(wp)[code] = Object.assign(State.wpVoortgang(wp)[code] || {}, { status: e.target.value });
     State.bewaar(); renderDetail(wp); renderOverzicht(); renderTaken(); renderDashboard();
   }));
+  els('#detailFasen .act-check').forEach((c) => c.addEventListener('change', (e) => {
+    const { wp, code } = e.target.dataset;
+    if (window.Auth && !Auth.magWpBewerken(wp)) return;
+    State.wpVoortgang(wp)[code] = Object.assign(State.wpVoortgang(wp)[code] || {}, { status: e.target.checked ? 'gereed' : 'open' });
+    State.bewaar(); renderDetail(wp); renderOverzicht(); renderTaken(); renderDashboard();
+  }));
   els('#detailFasen .act-notitie').forEach((inp) => inp.addEventListener('change', (e) => {
     const { wp, code } = e.target.dataset;
     if (window.Auth && !Auth.magWpBewerken(wp)) return;
     State.wpVoortgang(wp)[code] = Object.assign(State.wpVoortgang(wp)[code] || {}, { notitie: e.target.value });
     State.bewaar();
   }));
+}
+
+/* --------------- Procesoverzicht in het detail (fase-stepper) ------------- */
+// De eerstvolgende processtap: eerst een lopende activiteit, anders de eerste
+// openstaande stap in de huidige planningsfase, anders de eerste openstaande.
+function volgendeStap(w) {
+  const v = State.voortgang[w.id] || {};
+  const alle = [];
+  FASES.forEach((fase) => fase.activiteiten.forEach((activiteit) =>
+    alle.push({ fase, activiteit, status: (v[activiteit.code] && v[activiteit.code].status) || 'open' })));
+  const staatOpen = (x) => x.status !== 'gereed' && x.status !== 'nvt';
+  const bezig = alle.find((x) => x.status === 'bezig');
+  if (bezig) return bezig;
+  const hf = huidigeFase(w);
+  if (hf.fase) {
+    const inFase = alle.find((x) => x.fase.id === hf.fase.id && staatOpen(x));
+    if (inFase) return inFase;
+  }
+  return alle.find(staatOpen) || null;
+}
+
+function renderDetailProces(w, hf, magBew) {
+  const cont = el('#detailProces');
+  if (!cont) return;
+  const av = activiteitVoortgang(w);
+  const stap = volgendeStap(w);
+
+  const stappen = FASES.map((f, i) => {
+    const fv = faseVoortgang(w, f);
+    const af = fv.totaal > 0 && fv.klaar >= fv.totaal;
+    const huidig = !af && hf.fase && hf.fase.id === f.id;
+    const cls = af ? 'afgerond' : huidig ? 'huidig' : 'komend';
+    return `<button type="button" class="fstap ${cls}" data-fase="${f.id}" style="--c:${f.kleur}"
+      title="${htmlEsc(f.naam)}: ${fv.klaar} van ${fv.totaal} stappen gereed — klik om de checklist van deze fase te openen">
+      <span class="fstap-dot">${af ? '✓' : i + 1}</span>
+      <span class="fstap-naam">${htmlEsc(f.naam)}</span>
+      <span class="fstap-tel">${fv.klaar}/${fv.totaal} stappen</span>
+      ${huidig ? '<span class="fstap-badge">hier zijn we</span>' : ''}
+    </button>`;
+  }).join('');
+
+  const vsHtml = stap
+    ? `<div class="volgende-stap">
+        <button type="button" class="vs-tekst" title="Toon deze stap in de checklist hieronder">
+          <span class="vs-label">Volgende stap · ${htmlEsc(stap.fase.naam)}</span>
+          <b>${htmlEsc(stap.activiteit.code)} — ${htmlEsc(stap.activiteit.naam)}</b>
+        </button>
+        ${magBew ? '<button type="button" class="vs-vink">✓ Vink af als gereed</button>' : ''}
+      </div>`
+    : `<div class="volgende-stap klaar">🎉 Alle processtappen van dit werkpakket zijn afgevinkt (${av.klaar}/${av.totaal}).</div>`;
+
+  cont.innerHTML = `<div class="proces-kaart">
+    <div class="proces-kop"><span class="pk-label">Waar staan we in het proces?</span>
+      <span class="pk-voortgang"><b>${av.klaar}/${av.totaal}</b> stappen gereed · ${av.pct}%</span></div>
+    <div class="proces-voortgangsbalk"><span style="width:${av.pct}%"></span></div>
+    <div class="fase-stepper">${stappen}</div>
+    ${vsHtml}</div>`;
+
+  // Navigatie: klik op een fase of op de volgende stap → open de checklist daar.
+  const gaNaar = (faseId, code) => {
+    const blok = el(`#detailFasen .fblock[data-fase="${faseId}"]`);
+    if (!blok) return;
+    blok.open = true;
+    let doel = blok;
+    if (code) {
+      const act = blok.querySelector(`.act[data-act="${code}"]`);
+      if (act) { doel = act; act.classList.add('act-focus'); setTimeout(() => act.classList.remove('act-focus'), 1800); }
+    }
+    doel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  cont.querySelectorAll('.fstap').forEach((b) => b.addEventListener('click', () => gaNaar(b.dataset.fase)));
+  const vsTekst = cont.querySelector('.vs-tekst');
+  if (vsTekst && stap) vsTekst.addEventListener('click', () => gaNaar(stap.fase.id, stap.activiteit.code));
+  const vsVink = cont.querySelector('.vs-vink');
+  if (vsVink && stap) vsVink.addEventListener('click', () => {
+    if (window.Auth && !Auth.magWpBewerken(w.id)) return;
+    State.wpVoortgang(w.id)[stap.activiteit.code] = Object.assign(State.wpVoortgang(w.id)[stap.activiteit.code] || {}, { status: 'gereed' });
+    State.bewaar(); renderDetail(w.id); renderOverzicht(); renderTaken(); renderDashboard();
+  });
 }
 
 function leesAlleenBanner(w) {
@@ -867,13 +1003,65 @@ function leesAlleenBanner(w) {
 
 /* --------------------------- Activiteiten-ref ---------------------------- */
 function renderActiviteiten() {
+  const magBew = !window.Auth || Auth.magVolledig();
   el('#refBody').innerHTML = FASES.map((f) => `
     <section class="ref-fase">
       <h3 style="--c:${f.kleur}">${htmlEsc(f.code)} ${htmlEsc(f.naam)}</h3>
       <p class="ref-omschr">${htmlEsc(f.omschrijving)}</p>
       <table class="ref-tabel"><tbody>
-        ${f.activiteiten.map((a) => `<tr><td class="rc">${htmlEsc(a.code)}</td><td><strong>${htmlEsc(a.naam)}</strong><div class="sub">${htmlEsc(a.omschrijving)}</div></td></tr>`).join('')}
+        ${f.activiteiten.map((a) => {
+          const info = actInfo(a.code);
+          return `<tr><td class="rc">${htmlEsc(a.code)}</td><td>
+            <div class="ref-kop-rij"><strong>${htmlEsc(a.naam)}</strong>${info.aangepast ? '<span class="aangepast">aangepast</span>' : ''}${
+              magBew ? `<button class="ref-bewerk" data-code="${htmlEsc(a.code)}" title="Stapinformatie aanpassen">✎ Bewerken</button>` : ''}</div>
+            <div class="sub">${htmlEsc(info.omschrijving)}</div>
+            ${actHulpHtml(a.code, { metOmschrijving: false })}
+          </td></tr>`;
+        }).join('')}
       </tbody></table></section>`).join('');
+  els('#refBody .ref-bewerk').forEach((b) => b.addEventListener('click', () => openStapInfoModal(b.dataset.code)));
+}
+
+// Configuratie van de stapondersteuning: omschrijving, op te leveren en tip
+// per activiteit aanpassen. Alleen afwijkingen t.o.v. de standaardteksten
+// worden bewaard (in State.activiteitInfo), zodat standaard-updates blijven doorkomen.
+function openStapInfoModal(code) {
+  if (window.Auth && !Auth.magVolledig()) return;
+  const basis = ACTIVITEIT_INDEX[code].activiteit;
+  const info = actInfo(code);
+  openModal(`${code} · ${basis.naam}`, `
+    <p class="hint" style="margin-bottom:14px">Deze teksten ondersteunen het team bij deze stap en verschijnen in de werkpakket-checklist, de takenlijst en de bibliotheek. Aanpassingen worden voor iedereen bewaard.</p>
+    <div class="modal-veld"><label>Wat houdt deze stap in?</label><textarea id="siOmschr" rows="3">${htmlEsc(info.omschrijving)}</textarea></div>
+    <div class="modal-veld"><label>Op te leveren — één product per regel</label><textarea id="siOplever" rows="4" placeholder="bijv. Ingevuld intakeformulier">${htmlEsc(info.oplevering.join('\n'))}</textarea></div>
+    <div class="modal-veld"><label>Tip / aanpak</label><textarea id="siTip" rows="2" placeholder="Praktische hint voor wie deze stap uitvoert…">${htmlEsc(info.tip)}</textarea></div>
+    <div class="modal-foot">
+      ${info.aangepast ? '<button class="verwijder-knop" id="siStandaard">Standaardtekst herstellen</button>' : ''}
+      <button class="ghost" id="siAnnuleer">Annuleren</button>
+      <button class="primair" id="siBewaar">Bewaren</button>
+    </div>`);
+  const naOpslaan = () => {
+    State.bewaar(); sluitModal(); renderActiviteiten(); renderTaken();
+    if (State.actiefWp) renderDetail(State.actiefWp);
+    if (typeof renderMijnProjecten === 'function') renderMijnProjecten();
+  };
+  el('#siAnnuleer').addEventListener('click', sluitModal);
+  const st = el('#siStandaard');
+  if (st) st.addEventListener('click', () => {
+    delete State.activiteitInfo[code];
+    naOpslaan(); toast('Standaardtekst hersteld', 'ok');
+  });
+  el('#siBewaar').addEventListener('click', () => {
+    const omschr = el('#siOmschr').value.trim();
+    const oplever = el('#siOplever').value.split('\n').map((r) => r.trim()).filter(Boolean);
+    const tip = el('#siTip').value.trim();
+    const over = {};
+    if (omschr !== (basis.omschrijving || '')) over.omschrijving = omschr;
+    if (oplever.join('\n') !== (basis.oplevering || []).join('\n')) over.oplevering = oplever;
+    if (tip !== (basis.tip || '')) over.tip = tip;
+    if (Object.keys(over).length) State.activiteitInfo[code] = over;
+    else delete State.activiteitInfo[code];
+    naOpslaan(); toast('Stapinformatie bijgewerkt', 'ok');
+  });
 }
 
 /* --------------------------- Doorlooptijden ------------------------------ */
@@ -963,6 +1151,7 @@ function renderDashboard() {
   const tiles = [
     { val: s.aantal, label: 'Werkpakketten', cls: '', actie: 'overzicht' },
     { val: `${(s.meters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}<small> km</small>`, label: 'Nieuw tracé', cls: 'kpi-paars', actie: 'overzicht' },
+    { val: s.boringen.toLocaleString('nl-NL'), label: 'Boringen', cls: '', actie: 'overzicht' },
     { val: `${s.pct}<small>%</small>`, label: 'Gem. voortgang', cls: 'kpi-groen', actie: 'overzicht', extra: trend },
     { val: `${actGereed}<small>/${actTotaal}</small>`, label: 'Activiteiten gereed', cls: '', actie: 'overzicht' },
     { val: s.kritiek, label: 'Kritieke werkpakketten', cls: 'kpi-rood', actie: 'kritiek' },
@@ -1662,7 +1851,7 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
@@ -1677,6 +1866,7 @@ async function init() {
         if (data.snapshots) State.snapshots = data.snapshots;
         if (data.vergunningen) State.vergunningen = data.vergunningen;
         if (data.risicos) State.risicos = data.risicos;
+        if (data.activiteitInfo) State.activiteitInfo = data.activiteitInfo;
         State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
         toast('Werkbestand hersteld', 'ok'); toonTab('overzicht');
@@ -1699,7 +1889,7 @@ async function init() {
     localStorage.removeItem(CACHE_KEY);
     await DB.wisNeon();
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
-    State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = []; State.vergunningen = []; State.risicos = [];
+    State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = []; State.vergunningen = []; State.risicos = []; State.activiteitInfo = {};
     State.bewaar(); render(); toonTab('overzicht'); toast('Alles gewist', 'ok');
   });
 

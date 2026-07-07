@@ -30,8 +30,11 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
   het verhaal (streaming, in het Nederlands).
 - **Mijn projecten** — alleen de werkpakketten waaraan jij bent toegewezen, met
   je eigen taken voor de komende periode.
-- **Activiteiten / Doorlooptijden** — referentiebibliotheek en instelbare
-  doorlooptijden (werkdagen) per activiteit.
+- **Activiteiten / Doorlooptijden** — referentiebibliotheek met per stap een
+  omschrijving, de **op te leveren producten** en een praktische tip (ook
+  zichtbaar in de werkpakket-checklist en de takenlijst), plus instelbare
+  doorlooptijden (werkdagen) per activiteit. Ontwerpleider/manager kan de
+  stapteksten in de bibliotheek aanpassen; de aanpassingen gelden voor iedereen.
 - **Toewijzen** (ontwerpleider/manager) — gebruikers per werkpakket koppelen.
 - **Accounts** (ontwerpleider/manager) — rollen toekennen aan gebruikers.
 - **Beheer** — CSV-import, JSON-export/herstel, instellingen (peildatum, AI-model)
@@ -117,7 +120,9 @@ vercel dev    # vraagt om de env-variabelen of leest ze uit .env
 
 ## Aanpassen
 
-- Fasen/activiteiten en beschrijvingen: `js/activiteiten.js`
+- Fasen/activiteiten en beschrijvingen: `js/activiteiten.js` (standaardteksten,
+  incl. op te leveren producten en tips); per activiteit aan te passen in de app
+  via **Activiteiten → ✎ Bewerken** (ontwerpleider/manager)
 - Koppeling fase ↔ planning-mijlpaal: `startMijlpaal`/`eindMijlpaal` per fase
 - Peildatum ("vandaag"): instelbaar onder **Beheer → Instellingen**
 - AI-model voor rapportages: idem (standaard Claude Opus 4.8)

@@ -45,6 +45,7 @@ const DB = (() => {
       risicos: cache.risicos || [],
       gebruikers: cache.gebruikers || {},
       toewijzingen: cache.toewijzingen || {},
+      activiteitInfo: cache.activiteitInfo || {},
     };
     try {
       setStatus('bezig');
@@ -62,6 +63,7 @@ const DB = (() => {
           if (Array.isArray(d.risicos)) staat.risicos = d.risicos;
           if (d.gebruikers) staat.gebruikers = d.gebruikers;
           if (d.toewijzingen) staat.toewijzingen = d.toewijzingen;
+          if (d.activiteitInfo) staat.activiteitInfo = d.activiteitInfo;
           laatsteSync = d._bijgewerkt || new Date().toISOString();
           schrijfCache(staat);
           setStatus('online');
@@ -98,6 +100,7 @@ const DB = (() => {
           risicos: staat.risicos,
           gebruikers: staat.gebruikers,
           toewijzingen: staat.toewijzingen,
+          activiteitInfo: staat.activiteitInfo,
         }),
       });
       if (r.ok) {

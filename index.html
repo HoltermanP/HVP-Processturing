@@ -20,6 +20,7 @@
       <nav class="tabs">
         <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
         <button class="tab" data-tab="mijn"><span class="ico">★</span>Mijn projecten</button>
+        <button class="tab" data-tab="mijntaken"><span class="ico">☑</span>Mijn taken</button>
         <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
         <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
         <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
@@ -82,6 +83,18 @@
         </div>
       </div>
       <div id="mijnInhoud"></div>
+    </section>
+
+    <!-- ================= MIJN TAKEN (persoonlijke taaklijst) ================= -->
+    <section id="view-mijntaken" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Mijn taken</h2>
+          <p id="mtKop">Jouw persoonlijke taaklijst — berekend uit de werkpakketten waaraan jij bent toegewezen.</p>
+        </div>
+        <div class="seg-control" id="mtHorizonKiezer"></div>
+      </div>
+      <div id="mtInhoud"></div>
     </section>
 
     <!-- ================= PLANNING ================= -->
@@ -263,7 +276,7 @@
     <!-- ================= ACTIVITEITEN ================= -->
     <section id="view-activiteiten" class="view">
       <div class="card">
-        <div class="card-kop"><h2>Activiteitenbibliotheek</h2><span class="hint">Bron: Werkpakketactiviteiten beschrijvingen Nulelie 2.0</span></div>
+        <div class="card-kop"><h2>Activiteitenbibliotheek</h2><span class="hint">Per stap: wat het inhoudt, wat er opgeleverd moet worden en een tip. Bron: Werkpakketactiviteiten beschrijvingen Nulelie 2.0 — ontwerpleider/manager kan de teksten hier aanpassen.</span></div>
         <div id="refBody" class="ref"></div>
       </div>
     </section>
@@ -363,7 +376,8 @@
       </div>
       <button id="detailClose" class="close">✕</button>
     </div>
-    <div id="detailFaseInfo" class="fase-info"></div>
+    <div id="detailProces"></div>
+    <div id="detailKengetallen" class="kengetallen"></div>
     <div id="detailRegisters"></div>
     <div class="drawer-grid">
       <div>

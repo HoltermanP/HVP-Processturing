@@ -61,6 +61,7 @@ function renderMijnProjecten() {
     c.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   });
   els('#mijnTaken .taak[data-wp]').forEach((t) => t.addEventListener('click', () => openDetail(t.dataset.wp)));
+  if (typeof bindTaakHulp === 'function') bindTaakHulp('#mijnTaken');
 }
 
 function mijnWpKaart(w) {
@@ -74,6 +75,129 @@ function mijnWpKaart(w) {
     <div class="mijn-wp-fase" style="--c:${kleur}"><span class="stip" style="background:${kleur}"></span>${htmlEsc(faseLabel)} <span class="badge ${hf.status === 'afgerond' ? 'done' : hf.status === 'gepland' ? 'plan' : 'live'}">${htmlEsc(hf.status)}</span></div>
     <div class="statbar"><span class="stseg" style="width:${av.pct}%;background:var(--groen,#10b981)"></span></div>
     <div class="mijn-wp-meta">${av.klaar}/${av.totaal} activiteiten · ${av.pct}%${sigs.length ? ` · <span style="color:var(--rood,#ef4444)">${sigs.length} signaal(en)</span>` : ''}</div>
+  </div>`;
+}
+
+/* ------------------------------ Mijn taken -------------------------------- */
+// Persoonlijke taaklijst: wat moet IK (het ingelogde account) doen in de
+// gekozen periode, gegroepeerd op urgentie zodat direct duidelijk is waar je
+// moet beginnen.
+const MIJN_HORIZONS = [
+  { id: '7',  label: 'Komende week',     dagen: 7 },
+  { id: '14', label: 'Komende 14 dagen', dagen: 14 },
+  { id: '30', label: 'Komende maand',    dagen: 30 },
+];
+
+function renderMijnTaken() {
+  const cont = el('#mtInhoud');
+  if (!cont) return;
+  const kop = el('#mtKop');
+  if (kop) kop.innerHTML = `Persoonlijke taaklijst van <strong>${htmlEsc(Auth.naam())}</strong> — berekend uit de werkpakketten waaraan jij bent toegewezen.`;
+
+  const kiezer = el('#mtHorizonKiezer');
+  kiezer.innerHTML = MIJN_HORIZONS.map((h) =>
+    `<button data-h="${h.id}"${h.id === State.mijnHorizon ? ' class="actief"' : ''}>${htmlEsc(h.label)}</button>`).join('');
+  els('#mtHorizonKiezer button').forEach((b) => b.addEventListener('click', () => { State.mijnHorizon = b.dataset.h; renderMijnTaken(); }));
+
+  const mijn = Auth.mijnWerkpakketten();
+  if (!mijn.length) {
+    cont.innerHTML = `<div class="card"><div class="leeg">Je bent nog niet toegewezen aan werkpakketten, dus er zijn geen persoonlijke taken.${
+      Auth.magToewijzen()
+        ? ' Wijs jezelf of anderen toe via het tabblad <strong>Toewijzen</strong>.'
+        : ' Vraag je ontwerpleider om toewijzing.'}</div></div>`;
+    return;
+  }
+
+  const h = MIJN_HORIZONS.find((x) => x.id === State.mijnHorizon) || MIJN_HORIZONS[0];
+  const van = new Date(VANDAAG);
+  const tot = new Date(VANDAAG); tot.setDate(tot.getDate() + h.dagen);
+  const taken = komendeTaken(mijn, tot);
+
+  // Urgentie-groepen: direct oppakken → deze week starten → daarna.
+  const weekGrens = new Date(VANDAAG); weekGrens.setDate(weekGrens.getDate() + 7);
+  const direct = taken.filter((t) => t.ernst >= 3 || t.overtijd || VANDAAG > t.latestStart)
+    .sort((a, b) => a.faseEind - b.faseEind);
+  const dezeWeek = taken.filter((t) => !direct.includes(t) && (t.plannedStart <= weekGrens || t.latestStart <= weekGrens))
+    .sort((a, b) => a.latestStart - b.latestStart);
+  const later = taken.filter((t) => !direct.includes(t) && !dezeWeek.includes(t))
+    .sort((a, b) => a.plannedStart - b.plannedStart);
+
+  let mp = 0;
+  mijn.forEach((w) => MIJLPALEN.forEach((m) => { const d = parseDatum(w.mijlpalen[m.key]); if (d && d >= van && d <= tot) mp++; }));
+
+  const stats = [
+    { val: taken.length, label: 'taken in deze periode', cls: 'blauw' },
+    { val: direct.length, label: 'direct oppakken', cls: 'rood' },
+    { val: dezeWeek.length, label: 'deze week starten', cls: 'amber' },
+    { val: mp, label: 'mijlpalen in periode', cls: 'groen' },
+  ];
+  const statsHtml = `<div class="card">
+    <div class="card-kop"><h2>Periode: <span style="color:var(--accent)">${fmtDatum(van)} → ${fmtDatum(tot)}</span> <span class="hint">(${htmlEsc(h.label.toLowerCase())})</span></h2></div>
+    <div class="taken-stats">${stats.map((t) => `<div class="tstat ${t.cls}"><b>${t.val}</b><span>${t.label}</span></div>`).join('')}</div>
+  </div>`;
+
+  const groep = (titel, lijst, vlagKleur, uitleg) => {
+    if (!lijst.length) return '';
+    return `<div class="taakgroep">
+      <div class="taakgroep-kop"><span class="vlag" style="background:${vlagKleur}"></span>${titel}<span class="hint">${uitleg}</span><span class="telp">${lijst.length}</span></div>
+      ${lijst.map(mijnTaakKaart).join('')}</div>`;
+  };
+
+  const inhoud =
+    groep('Direct oppakken', direct, '#ef4444', 'te laat, geblokkeerd of uiterste startdatum verstreken') +
+    groep('Deze week starten', dezeWeek, '#f59e0b', 'gepland of uiterlijk te starten binnen 7 dagen') +
+    groep('Daarna in deze periode', later, '#3b82f6', 'volgens de faseplanning');
+
+  cont.innerHTML = statsHtml + (inhoud || '<div class="card"><div class="leeg">Geen taken in deze periode — alles is gereed of gepland na de gekozen horizon. 👍</div></div>');
+
+  els('#mtInhoud .taak[data-wp]').forEach((t) => t.addEventListener('click', () => openDetail(t.dataset.wp)));
+  if (typeof bindTaakHulp === 'function') bindTaakHulp('#mtInhoud');
+  els('#mtInhoud .taak-gereed').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const { wp, code } = b.dataset;
+    if (window.Auth && !Auth.magWpBewerken(wp)) return;
+    State.wpVoortgang(wp)[code] = Object.assign(State.wpVoortgang(wp)[code] || {}, { status: 'gereed' });
+    State.bewaar();
+    toast('Activiteit gereed gemeld', 'ok');
+    render();
+  }));
+}
+
+// Taakkaart voor de persoonlijke lijst: wát moet er gebeuren (activiteit +
+// omschrijving), wáár (project/WP), wannéér (uiterste start + deadline) en een
+// knop om direct gereed te melden.
+function mijnTaakKaart(t) {
+  const w = t.wp;
+  const dagen = dagenVerschil(VANDAAG, t.faseEind);
+  const deadlineTxt = t.overtijd
+    ? `<span style="color:var(--rood)">${Math.abs(dagen)}d over deadline</span>`
+    : `nog <b>${dagen}d</b> tot fase-eind`;
+  const startTxt = VANDAAG > t.latestStart
+    ? '<b style="color:var(--rood)">vandaag starten</b>'
+    : `uiterlijk starten: <b>${fmtDatum(t.latestStart)}</b>`;
+  const vlaggen = t.flags.map((f) => `<span class="tflag ${f}">${f}</span>`).join('');
+  const stKleur = STATUSSEN[t.status].kleur;
+  const notitie = ((State.voortgang[w.id] || {})[t.activiteit.code] || {}).notitie || '';
+  const magBew = !window.Auth || Auth.magWpBewerken(w.id);
+  const hulp = (typeof actHulpHtml === 'function') ? actHulpHtml(t.activiteit.code) : '';
+  return `<div class="taak ernst-${t.ernst}" data-wp="${htmlEsc(w.id)}">
+    <div class="taak-hoofd">
+      <div class="taak-titel"><span class="tcode">${htmlEsc(t.activiteit.code)}</span>${htmlEsc(t.activiteit.naam)}</div>
+      <div class="taak-omschr">${htmlEsc(t.activiteit.omschrijving)}</div>
+      ${notitie ? `<div class="taak-notitie">📝 ${htmlEsc(notitie)}</div>` : ''}
+      <div class="taak-meta">
+        <span>${htmlEsc(w.project)} · ${htmlEsc(apdVan(w))} · <b>${htmlEsc(w.wp)}</b></span>
+        <span>fase: <b>${htmlEsc(t.fase.naam)}</b></span>
+        <span>doorlooptijd: <b>${t.dt} wd</b></span>
+      </div>
+      ${hulp ? `<button class="taak-info-knop" type="button" aria-expanded="false">ℹ︎ Wat houdt deze stap in?</button><div class="taak-hulp">${hulp}</div>` : ''}
+    </div>
+    <div class="taak-rechts">
+      <div class="taak-vlaggen">${vlaggen}<span class="statuschip" style="background:${stKleur}">${STATUSSEN[t.status].label}</span></div>
+      <div class="taak-deadline">${deadlineTxt} <em>(${fmtDatum(t.faseEind)})</em></div>
+      <div class="hint">${startTxt}</div>
+      ${magBew ? `<button class="taak-gereed" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(t.activiteit.code)}" title="Zet deze activiteit op Gereed">✓ Meld gereed</button>` : ''}
+    </div>
   </div>`;
 }
 
@@ -138,7 +262,7 @@ function renderToewijzen() {
     const lijst = State.toewijzingen[wpId] || (State.toewijzingen[wpId] = []);
     if (!lijst.includes(uid)) lijst.push(uid);
     State.bewaar();
-    renderToewijzen(); renderMijnProjecten();
+    renderToewijzen(); renderMijnProjecten(); renderMijnTaken();
     toast(`${userNaam(uid)} toegewezen`, 'ok');
   }));
   els('#toewijzenInhoud .chip-x').forEach((b) => b.addEventListener('click', () => {
@@ -146,7 +270,7 @@ function renderToewijzen() {
     State.toewijzingen[wpId] = (State.toewijzingen[wpId] || []).filter((x) => x !== uid);
     if (!State.toewijzingen[wpId].length) delete State.toewijzingen[wpId];
     State.bewaar();
-    renderToewijzen(); renderMijnProjecten();
+    renderToewijzen(); renderMijnProjecten(); renderMijnTaken();
     toast('Toewijzing verwijderd', 'ok');
   }));
 }
@@ -200,6 +324,7 @@ function renderAccounts() {
 
 if (typeof window !== 'undefined') {
   window.renderMijnProjecten = renderMijnProjecten;
+  window.renderMijnTaken = renderMijnTaken;
   window.renderToewijzen = renderToewijzen;
   window.renderAccounts = renderAccounts;
 }

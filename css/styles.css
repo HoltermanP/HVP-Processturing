@@ -248,7 +248,38 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .drawer-kop h2{font-size:19px}
 .close{background:var(--panel-2);border:1px solid var(--line);width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:16px;color:var(--sub);transition:.15s}
 .close:hover{background:var(--line-2);color:var(--ink)}
-.fase-info{margin:16px 0;padding:13px 16px;background:var(--panel-2);border-radius:11px;font-size:13px;border:1px solid var(--line)}
+/* Procesoverzicht in het detail: fase-stepper + volgende stap */
+.proces-kaart{margin:16px 0;padding:16px 18px;background:var(--panel-2);border:1px solid var(--line);border-radius:14px}
+.proces-kop{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.pk-label{font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.5px}
+.pk-voortgang{font-size:12.5px;color:var(--sub)}
+.pk-voortgang b{color:var(--ink);font-size:13.5px}
+.proces-voortgangsbalk{height:8px;border-radius:5px;background:var(--line);overflow:hidden;margin:8px 0 18px}
+.proces-voortgangsbalk span{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--groen),#34d399);transition:width .3s}
+.fase-stepper{display:flex;position:relative;margin-bottom:16px}
+.fase-stepper::before{content:'';position:absolute;top:16px;left:9%;right:9%;height:3px;border-radius:2px;background:var(--line)}
+.fstap{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;padding:0 4px;cursor:pointer;position:relative;font-family:inherit}
+.fstap-dot{width:33px;height:33px;border-radius:50%;border:3px solid var(--line);background:#fff;color:var(--faint);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;z-index:1;transition:transform .15s,box-shadow .15s}
+.fstap.afgerond .fstap-dot{background:var(--c);border-color:var(--c);color:#fff}
+.fstap.huidig .fstap-dot{border-color:var(--c);color:var(--c);box-shadow:0 0 0 5px rgba(37,99,235,.14)}
+.fstap:hover .fstap-dot{transform:scale(1.1)}
+.fstap-naam{font-size:12px;font-weight:700;color:var(--ink-2);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fstap.huidig .fstap-naam{color:var(--c)}
+.fstap.komend .fstap-naam{color:var(--sub);font-weight:600}
+.fstap-tel{font-size:10.5px;color:var(--sub);white-space:nowrap;font-variant-numeric:tabular-nums}
+.fstap-badge{font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;background:var(--c);color:#fff;border-radius:999px;padding:2px 8px;margin-top:2px;white-space:nowrap}
+.volgende-stap{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--groen);border-radius:11px;padding:11px 14px}
+.volgende-stap.klaar{border-left-color:var(--groen);background:#f0fdf4;font-weight:600;color:#047857}
+.vs-tekst{flex:1;min-width:0;background:none;border:0;padding:0;text-align:left;cursor:pointer;font-family:inherit}
+.vs-label{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--groen);margin-bottom:2px}
+.vs-tekst b{font-size:13.5px;color:var(--ink);display:block}
+.vs-tekst:hover b{color:var(--accent);text-decoration:underline}
+.vs-vink{background:var(--groen);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s}
+.vs-vink:hover{background:#059669;transform:translateY(-1px)}
+.kengetallen{margin:0 0 16px}
+.keng-veld{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:600;color:var(--ink-2);padding:11px 16px;background:var(--panel-2);border:1px solid var(--line);border-radius:11px}
+.keng-veld input{width:110px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;text-align:right;background:#fff;color:var(--ink)}
+.keng-veld input:disabled{background:var(--panel-2);color:var(--sub)}
 .drawer-grid{display:grid;grid-template-columns:248px 1fr;gap:24px}
 @media(max-width:680px){.drawer-grid{grid-template-columns:1fr}}
 .drawer-grid h3{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin-bottom:12px}
@@ -274,11 +305,15 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .act{padding:12px 14px;border-bottom:1px solid var(--line-2)}
 .act:last-child{border-bottom:0}
 .act-top{display:flex;align-items:center;gap:10px}
+.act-check{width:19px;height:19px;flex:0 0 auto;accent-color:var(--groen);cursor:pointer;margin:0}
+.act-check:disabled{cursor:default}
 .act-code{font-weight:700;color:var(--accent);font-size:12px;white-space:nowrap;min-width:56px}
 .act-naam{flex:1;font-weight:600;font-size:13px}
 .act-status{border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:12px;border-left:4px solid var(--c);background:#fff;cursor:pointer}
-.act-omschr{color:var(--sub);font-size:12px;margin:6px 0 8px 66px}
-.act-notitie{width:calc(100% - 66px);margin-left:66px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12px}
+.act-omschr{color:var(--sub);font-size:12px;margin:6px 0 8px 95px}
+.act-notitie{width:calc(100% - 95px);margin-left:95px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12px}
+.act-focus{animation:actFocus 1.8s ease}
+@keyframes actFocus{0%,60%{box-shadow:inset 0 0 0 3px var(--accent);background:var(--accent-soft)}100%{box-shadow:none}}
 .act-notitie:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
 .act.gereed{background:#f0fdf4}
 .act.geblokkeerd{background:#fef2f2}
@@ -382,6 +417,7 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 
 .taakgroep{margin-bottom:8px}
 .taakgroep-kop{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px;margin:18px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+.taakgroep-kop .hint{font-weight:450}
 .taakgroep-kop .vlag{width:10px;height:10px;border-radius:50%}
 .taakgroep-kop .telp{margin-left:auto;font-size:12px;font-weight:600;color:var(--sub);background:var(--panel-2);padding:3px 10px;border-radius:20px}
 .taak{
@@ -409,6 +445,15 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .tflag.mijlpaal{background:var(--accent-soft);color:#1d4ed8}
 .taak-deadline{font-size:12px;color:var(--ink-2);font-weight:600}
 .taak-deadline em{color:var(--sub);font-weight:400;font-style:normal}
+
+/* Mijn taken (persoonlijke taaklijst) */
+.taak-omschr{font-size:12px;color:var(--sub);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.taak-notitie{font-size:12px;color:var(--ink-2);background:var(--accent-soft);border-radius:8px;padding:5px 9px;width:fit-content}
+.taak-gereed{
+  border:1px solid var(--groen);background:#fff;color:var(--groen);
+  font-size:12px;font-weight:650;padding:5px 12px;border-radius:9px;cursor:pointer;transition:.14s;
+}
+.taak-gereed:hover{background:var(--groen);color:#fff}
 .statuschip{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;color:#fff}
 
 /* ============================ Dashboard extra ============================ */
@@ -653,3 +698,23 @@ input:disabled,select:disabled{background:#f1f5f9;color:#94a3b8;cursor:not-allow
 /* Accounts */
 .acc-ik{font-size:10px;font-weight:700;background:var(--groen-soft);color:#047857;border-radius:999px;padding:2px 7px;margin-left:6px;text-transform:uppercase}
 .acc-rol{min-width:150px}
+
+/* Stapondersteuning: op te leveren producten & tips per activiteit */
+.act-oplever{margin:6px 0 8px 95px;background:var(--accent-soft,#eff6ff);border:1px solid #dbeafe;border-radius:10px;padding:8px 12px;font-size:12px}
+.act-oplever-kop{display:block;font-weight:650;color:#1d4ed8;margin-bottom:3px;font-size:11.5px}
+.act-oplever ul{margin:0;padding-left:18px;color:var(--ink-2,#334155)}
+.act-oplever li{margin:2px 0}
+.act-tip{margin:0 0 8px 95px;font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:7px 12px}
+
+/* In de takenlijst: uitklapbare stapinfo op de taakkaart */
+.taak-info-knop{margin-top:7px;align-self:flex-start;background:none;border:0;padding:0;font-size:12px;color:var(--accent,#2563eb);cursor:pointer;font-weight:600}
+.taak-info-knop:hover{text-decoration:underline}
+.taak-hulp{display:none;margin-top:6px}
+.taak-hulp.open{display:block}
+.taak-hulp .act-omschr,.taak-hulp .act-oplever,.taak-hulp .act-tip{margin-left:0}
+
+/* Activiteitenbibliotheek: stapinfo tonen en bewerken */
+.ref-kop-rij{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ref-bewerk{margin-left:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:11.5px;color:var(--sub);cursor:pointer;transition:.15s}
+.ref-bewerk:hover{border-color:var(--accent);color:var(--accent)}
+.ref-tabel .act-omschr,.ref-tabel .act-oplever,.ref-tabel .act-tip{margin-left:0}
