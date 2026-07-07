@@ -46,6 +46,7 @@ const DB = (() => {
       gebruikers: cache.gebruikers || {},
       toewijzingen: cache.toewijzingen || {},
       activiteitInfo: cache.activiteitInfo || {},
+      tsb: cache.tsb || { formats: [], projecten: [], instellingen: {} },
     };
     try {
       setStatus('bezig');
@@ -64,6 +65,7 @@ const DB = (() => {
           if (d.gebruikers) staat.gebruikers = d.gebruikers;
           if (d.toewijzingen) staat.toewijzingen = d.toewijzingen;
           if (d.activiteitInfo) staat.activiteitInfo = d.activiteitInfo;
+          if (d.tsb) staat.tsb = d.tsb;
           laatsteSync = d._bijgewerkt || new Date().toISOString();
           schrijfCache(staat);
           setStatus('online');
@@ -101,6 +103,7 @@ const DB = (() => {
           gebruikers: staat.gebruikers,
           toewijzingen: staat.toewijzingen,
           activiteitInfo: staat.activiteitInfo,
+          tsb: staat.tsb,
         }),
       });
       if (r.ok) {

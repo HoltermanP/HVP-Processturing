@@ -28,6 +28,22 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
   terugblik op de afgelopen periode én een vooruitblik op wat er nog moet
   gebeuren. De cijfers worden in de app berekend; de **Anthropic-API** schrijft
   het verhaal (streaming, in het Nederlands).
+- **TSB** — kostenbegrotingen, gewerkte uren en gemaakte kosten per project
+  (overgenomen uit de losse HVP-TSB-app):
+  - *Formats*: herbruikbare basis met rollen + uurtarieven en de structuur
+    fasen ▸ groepen ▸ regelitems (inzet in uren per eenheid). Een
+    standaardformat (VO/DO/UO) is met één klik aan te maken.
+  - *Begrotingen*: per project een TSB op basis van een format. Vul de
+    hoeveelheden (Hv) en eventueel afwijkende inzet in; duur, bedragen en de
+    prijs per eenheid worden berekend (duur = inzet × hoeveelheid, bedrag =
+    duur × tarief), met subtotalen per fase en een eindtotaal. Export naar CSV
+    (opent in Excel).
+  - *Uren & kosten*: boek gewerkte uren per maand en rol (ook via CSV-import:
+    `project;periode;rol;uren;omschrijving`) en overige gemaakte kosten.
+  - *Sturing*: begroot versus besteed (uren én euro's) per project, per rol en
+    per maand — met een periode-filter (cumulatief t/m een maand). De
+    bestedingsgraad staat ook als kaart op het Dashboard en de cijfers gaan mee
+    in de AI-rapportages.
 - **Mijn projecten** — alleen de werkpakketten waaraan jij bent toegewezen, met
   je eigen taken voor de komende periode.
 - **Activiteiten / Doorlooptijden** — referentiebibliotheek met per stap een
@@ -49,7 +65,9 @@ bent, de app bepaalt *wat* je mag. De handhaving gebeurt in de UI.
 Rollen: **engineer, omgevingsmanager, projectleider, ontwerpleider, manager**.
 
 - **Ontwerpleider** en **manager** mogen alles bewerken, werkpakketten toewijzen
-  en accounts/rollen beheren.
+  en accounts/rollen beheren. Ook TSB-formats, begrotingen en kosten zijn aan
+  deze rollen voorbehouden; **uren boeken** mag daarnaast door iedereen die aan
+  een werkpakket van het betreffende project is toegewezen.
 - **Engineer, omgevingsmanager, projectleider** zien álle projecten in de
   tabbladen, maar bewerken alleen de **voortgang van hun toegewezen
   werkpakketten** (de rest is alleen-lezen).

@@ -25,6 +25,7 @@
         <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
         <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
         <button class="tab" data-tab="risico"><span class="ico">⚠</span>Risico's</button>
+        <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
         <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
         <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
         <button class="tab" data-tab="activiteiten"><span class="ico">≣</span>Activiteiten</button>
@@ -154,6 +155,18 @@
       <div id="riskInhoud"></div>
     </section>
 
+    <!-- ================= TSB (begroting, uren & kosten) ================= -->
+    <section id="view-tsb" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>TSB — begroting, uren &amp; kosten</h2>
+          <p>Stel per project een TSB (kostenbegroting) op vanuit een herbruikbaar format, boek gewerkte uren en gemaakte kosten, en stuur op begroot versus besteed.</p>
+        </div>
+        <div class="seg-control" id="tsbTabs"></div>
+      </div>
+      <div id="tsbInhoud"></div>
+    </section>
+
     <!-- ================= DASHBOARD / RAPPORTAGE ================= -->
     <section id="view-dashboard" class="view">
       <div class="section-kop">
@@ -165,6 +178,11 @@
       </div>
 
       <div id="dashKpis" class="kpis"></div>
+
+      <div class="card" id="dashTsbKaart" style="display:none">
+        <div class="card-kop"><h2>TSB — begroot vs. besteed</h2><span class="hint">gewerkte uren × tarief + overige kosten, uit de TSB-module · klik voor detail</span></div>
+        <div id="dashTsb"></div>
+      </div>
 
       <div class="grid-2">
         <div class="card">
@@ -407,6 +425,7 @@
   <script src="js/db.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/registers.js"></script>
+  <script src="js/tsb.js"></script>
   <script src="js/rechten.js"></script>
   <script src="js/app.js"></script>
 </body>

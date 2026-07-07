@@ -61,6 +61,7 @@ const State = {
   gebruikers: {},
   toewijzingen: {},
   activiteitInfo: {},
+  tsb: { formats: [], projecten: [], instellingen: {} },
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   actiefWp: null,
   horizon: '30',
@@ -81,6 +82,7 @@ const State = {
     this.gebruikers = staat.gebruikers || {};
     this.toewijzingen = staat.toewijzingen || {};
     this.activiteitInfo = staat.activiteitInfo || {};
+    this.tsb = staat.tsb || { formats: [], projecten: [], instellingen: {} };
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     // Verse start: ook de statussen uit de planning meeladen.
@@ -104,6 +106,7 @@ const State = {
       gebruikers: this.gebruikers,
       toewijzingen: this.toewijzingen,
       activiteitInfo: this.activiteitInfo,
+      tsb: this.tsb,
     });
   },
   wpVoortgang(wpId) {
@@ -429,6 +432,7 @@ function render() {
   renderTaken();
   renderVergunningen();
   renderRisicos();
+  if (typeof renderTsb === 'function') renderTsb();
   renderDashboard();
   renderRapportenControls();
   renderActiviteiten();
@@ -1244,6 +1248,7 @@ function renderDashboard() {
 
   renderTrend();
   renderTijdlijn();
+  if (typeof renderDashboardTsb === 'function') renderDashboardTsb();
 }
 
 /* ----------------------- Dashboard: interactie & visuals ----------------- */
@@ -1489,6 +1494,7 @@ function bouwRapportData(scope, van, tot, label) {
     terugblik: { mijlpalenInPeriode: mpPeriode },
     vooruitblik: { naderendeMijlpalen: mpKomend.slice(0, 25), reedsTeLaat, dreigtTeLaat, nietGetoond },
     registers: registerRapportData(scope),
+    tsb: typeof tsbRapportData === 'function' ? tsbRapportData(scope) : null,
     perProject,
   };
 }
@@ -1510,6 +1516,7 @@ Verplichte structuur:
 ## Samenvatting   (3-5 kernzinnen; open met het scherpste dreigt-te-laat-signaal)
 ## Terugblik afgelopen periode   (mijlpalen die gepland stonden en hun status; voortgangsontwikkeling indien beschikbaar)
 ## Voortgang & KPI's   (kerncijfers; gebruik een korte Markdown-tabel)
+## Financiën — TSB, uren & kosten   (ALLEEN als het veld "tsb" in de data gevuld is: begroot versus besteed in uren en euro's per project, opvallende over-/onderschrijdingen (pctBesteedBedrag > 100 = overschrijding) en wat dat betekent voor de sturing; laat deze sectie anders volledig weg)
 ## Vroegsignalering — dreigt te laat   (acties die nu om een besluit/start vragen vóór hun uiterste startdatum; prioriteer, herhaal de radartabel niet)
 ## Reeds te laat & blokkades   (over-datum acties, geblokkeerd/issue; betrek het risico-register (top-risico's met score) en vergunningen/ZRO die over de besluitdatum zijn)
 ## Vooruitblik komende periode   (naderende mijlpalen, openstaande vergunningen/ZRO en wat er concreet gedaan moet worden)
@@ -1851,7 +1858,7 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
@@ -1867,6 +1874,7 @@ async function init() {
         if (data.vergunningen) State.vergunningen = data.vergunningen;
         if (data.risicos) State.risicos = data.risicos;
         if (data.activiteitInfo) State.activiteitInfo = data.activiteitInfo;
+        if (data.tsb) State.tsb = data.tsb;
         State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
         toast('Werkbestand hersteld', 'ok'); toonTab('overzicht');
@@ -1890,6 +1898,7 @@ async function init() {
     await DB.wisNeon();
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
     State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = []; State.vergunningen = []; State.risicos = []; State.activiteitInfo = {};
+    State.tsb = { formats: [], projecten: [], instellingen: {} };
     State.bewaar(); render(); toonTab('overzicht'); toast('Alles gewist', 'ok');
   });
 
