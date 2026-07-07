@@ -126,7 +126,11 @@ const State = {
     if (this.doorlooptijden[code] != null && this.doorlooptijden[code] !== '') return +this.doorlooptijden[code];
     return ACTIVITEIT_INDEX[code] ? ACTIVITEIT_INDEX[code].activiteit.dtDefault : 5;
   },
-  model() { return this.instellingen.model || 'claude-opus-4-8'; },
+  model() {
+    // Sonnet 4.6 stond eerder in de keuzelijst; map die naar de opvolger.
+    const m = this.instellingen.model === 'claude-sonnet-4-6' ? 'claude-sonnet-5' : this.instellingen.model;
+    return m || 'claude-sonnet-5';
+  },
 };
 
 function apdVan(w) { return (w.apd || '').trim() || '—'; }

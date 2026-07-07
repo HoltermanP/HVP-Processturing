@@ -376,10 +376,10 @@
           </div>
           <div class="inst-veld">
             <label>AI-model voor rapportages</label>
-            <span class="uitleg">Wordt server-side gebruikt via de Anthropic-API. Opus 4.8 geeft de beste kwaliteit.</span>
+            <span class="uitleg">Wordt server-side gebruikt via de Anthropic-API. Sonnet 5 is snel en vrijwel even goed; Opus 4.8 geeft de scherpste analyse (bijv. voor kwartaalrapportages) maar is trager.</span>
             <select id="instModel">
-              <option value="claude-opus-4-8">Claude Opus 4.8 (aanbevolen)</option>
-              <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (sneller)</option>
+              <option value="claude-sonnet-5">Claude Sonnet 5 (aanbevolen — snel)</option>
+              <option value="claude-opus-4-8">Claude Opus 4.8 (hoogste kwaliteit, trager)</option>
               <option value="claude-haiku-4-5">Claude Haiku 4.5 (snelst/goedkoopst)</option>
             </select>
           </div>

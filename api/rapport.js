@@ -43,7 +43,7 @@ export default async function handler(req, res) {
 
   try {
     const stream = client.messages.stream({
-      model: model || 'claude-opus-4-8',
+      model: model || 'claude-sonnet-5',
       max_tokens: 16000,
       system: system || undefined,
       messages: [{ role: 'user', content: prompt }],

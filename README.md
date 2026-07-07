@@ -143,5 +143,5 @@ vercel dev    # vraagt om de env-variabelen of leest ze uit .env
   via **Activiteiten → ✎ Bewerken** (ontwerpleider/manager)
 - Koppeling fase ↔ planning-mijlpaal: `startMijlpaal`/`eindMijlpaal` per fase
 - Peildatum ("vandaag"): instelbaar onder **Beheer → Instellingen**
-- AI-model voor rapportages: idem (standaard Claude Opus 4.8)
+- AI-model voor rapportages: idem (standaard Claude Sonnet 5; Opus 4.8 als kwaliteitsoptie)
 - Voorbeelddata: `js/seed.js`
