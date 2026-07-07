@@ -40,6 +40,15 @@ const AI = (() => {
       vol += dec.decode(value, { stream: true });
       if (onDelta) onDelta(vol);
     }
+    // De server sluit een voltooid rapport af met een eindmarkering. Ontbreekt
+    // die, dan is de stream onderweg afgebroken (tijdslimiet/verbinding) en
+    // zou de tekst anders stilletjes midden in een zin eindigen.
+    const KLAAR = '<!--EINDE-->';
+    if (vol.includes(KLAAR)) {
+      vol = vol.replace(KLAAR, '').trimEnd();
+    } else if (vol.trim()) {
+      vol = vol.trimEnd() + '\n\n> ⚠️ **De rapportage is afgebroken voordat hij klaar was** (tijdslimiet of verbinding). Probeer het opnieuw; lukt het vaker niet, kies dan onder **Beheer → Instellingen** een sneller model (Sonnet of Haiku).';
+    }
     return vol;
   }
 

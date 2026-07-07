@@ -50,7 +50,13 @@ export default async function handler(req, res) {
     });
 
     stream.on('text', (delta) => { res.write(delta); });
-    await stream.finalMessage();
+    const eind = await stream.finalMessage();
+    if (eind.stop_reason === 'max_tokens') {
+      res.write('\n\n> ⚠️ Het rapport bereikte de maximale lengte (16.000 tokens) en is mogelijk niet helemaal compleet.');
+    }
+    // Expliciete eindmarkering: zo kan de frontend een afgebroken stream
+    // (bijv. door de Vercel-tijdslimiet) onderscheiden van een voltooid rapport.
+    res.write('\n<!--EINDE-->');
     res.end();
   } catch (e) {
     if (!res.headersSent) {
