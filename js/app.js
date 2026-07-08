@@ -64,6 +64,8 @@ const State = {
   tsb: { formats: [], projecten: [], instellingen: {} },
   tolgates: [],
   tolgateInstances: [],
+  wijzigingen: [],
+  vtws: [],
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   actiefWp: null,
   horizon: '30',
@@ -90,6 +92,8 @@ const State = {
       ? staat.tolgates
       : JSON.parse(JSON.stringify(window.STANDAARD_TOLGATES || []));
     this.tolgateInstances = staat.tolgateInstances || [];
+    this.wijzigingen = staat.wijzigingen || [];
+    this.vtws = staat.vtws || [];
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     // Verse start: ook de statussen uit de planning meeladen.
@@ -116,6 +120,8 @@ const State = {
       tsb: this.tsb,
       tolgates: this.tolgates,
       tolgateInstances: this.tolgateInstances,
+      wijzigingen: this.wijzigingen,
+      vtws: this.vtws,
     });
   },
   wpVoortgang(wpId) {
@@ -446,6 +452,7 @@ function render() {
   renderVergunningen();
   renderRisicos();
   if (typeof renderTsb === 'function') renderTsb();
+  if (typeof renderWijzigingen === 'function') renderWijzigingen();
   renderDashboard();
   renderRapportenControls();
   renderActiviteiten();
@@ -461,7 +468,7 @@ function render() {
 // Schakel bewerk-elementen aan/uit op basis van de rol (handhaving in de UI).
 function gateUI() {
   const vol = !window.Auth || Auth.magVolledig();
-  ['#csvFile', '#jsonFile', '#btnSeed', '#btnWis', '#instSnapshot', '#instPeildatum', '#instModel'].forEach((s) => {
+  ['#csvFile', '#jsonFile', '#btnSeed', '#btnWis', '#instSnapshot', '#instPeildatum', '#instModel', '#instVtwFormat'].forEach((s) => {
     const n = el(s); if (n) n.disabled = !vol;
   });
   document.querySelectorAll('.filebtn').forEach((l) => l.classList.toggle('uit', !vol));
@@ -1894,6 +1901,7 @@ async function init() {
   await State.laad();
   Auth.koppelGebruiker();        // registreer gebruiker + bepaal rol
   registersInit();
+  if (typeof wijzigingenInit === 'function') wijzigingenInit();
 
   els('.tab').forEach((t) => t.addEventListener('click', () => toonTab(t.dataset.tab)));
   el('#detailClose').addEventListener('click', sluitDetail);
@@ -1954,7 +1962,7 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances, wijzigingen: State.wijzigingen, vtws: State.vtws }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
@@ -1973,6 +1981,8 @@ async function init() {
         if (data.tsb) State.tsb = data.tsb;
         if (data.tolgates) State.tolgates = data.tolgates;
         if (data.tolgateInstances) State.tolgateInstances = data.tolgateInstances;
+        if (data.wijzigingen) State.wijzigingen = data.wijzigingen;
+        if (data.vtws) State.vtws = data.vtws;
         State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
         toast('Werkbestand hersteld', 'ok'); toonTab('overzicht');
@@ -1999,6 +2009,7 @@ async function init() {
     State.tsb = { formats: [], projecten: [], instellingen: {} };
     State.tolgates = JSON.parse(JSON.stringify(window.STANDAARD_TOLGATES || []));
     State.tolgateInstances = [];
+    State.wijzigingen = []; State.vtws = [];
     State.bewaar(); render(); toonTab('overzicht'); toast('Alles gewist', 'ok');
   });
 

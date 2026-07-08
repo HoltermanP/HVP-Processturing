@@ -26,6 +26,7 @@
         <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
         <button class="tab" data-tab="risico"><span class="ico">⚠</span>Risico's</button>
         <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
+        <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
         <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
         <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
         <button class="tab" data-tab="activiteiten"><span class="ico">≣</span>Activiteiten</button>
@@ -165,6 +166,31 @@
         <div class="seg-control" id="tsbTabs"></div>
       </div>
       <div id="tsbInhoud"></div>
+    </section>
+
+    <!-- ================= WIJZIGINGEN & VTW's ================= -->
+    <section id="view-wijzigingen" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Wijzigingenregister &amp; VTW's</h2>
+          <p>Registreer wijzigingen op de TSB-posten (begroting, uren &amp; kosten) per werkpakket, beoordeel ze (goed-/afkeuren met toelichting) en bundel geselecteerde wijzigingen in een VTW — opgesteld door AI volgens het format uit Beheer → Instellingen.</p>
+        </div>
+        <button class="primair" id="wzToevoegen"><span class="ico">＋</span> Toevoegen</button>
+      </div>
+      <div class="card"><div id="wzKpis" class="taken-stats"></div></div>
+      <div id="wzInhoud"></div>
+      <div id="vtwLijst"></div>
+      <div class="card" id="vtwUitvoerKaart" style="display:none">
+        <div class="card-kop">
+          <h2>VTW</h2>
+          <div class="knoppenrij">
+            <button id="vtwDownload" class="ghost">Download HTML</button>
+            <button id="vtwKopieer" class="ghost">Kopieer tekst</button>
+          </div>
+        </div>
+        <div id="vtwStatus" class="ai-status"></div>
+        <div id="vtwDoc" class="rapport-doc"></div>
+      </div>
     </section>
 
     <!-- ================= DASHBOARD / RAPPORTAGE ================= -->
@@ -384,6 +410,11 @@
             </select>
           </div>
           <div class="inst-veld">
+            <label>VTW-format</label>
+            <span class="uitleg">Het format waarin VTW's (Verzoek Tot Wijziging) worden opgesteld: koppen, volgorde en vaste onderdelen. Leeg laten = de AI hanteert zelf een professioneel standaardformat.</span>
+            <textarea id="instVtwFormat" rows="8" placeholder="bijv.&#10;# VTW [nummer] — [titel]&#10;## Aanleiding&#10;## Omschrijving van de wijziging&#10;## Consequenties kosten&#10;## Consequenties planning&#10;## Besluit opdrachtgever"></textarea>
+          </div>
+          <div class="inst-veld">
             <label>Database &amp; API-sleutels</label>
             <span class="uitleg">De Neon-connectionstring (<code>DATABASE_URL</code>) en de Anthropic-sleutel (<code>ANTHROPIC_API_KEY</code>) worden als <strong>environment variables in Vercel</strong> ingesteld — niet hier in de browser. Status: <span id="instDbInfo"></span></span>
           </div>
@@ -443,6 +474,7 @@
   <script src="js/registers.js"></script>
   <script src="js/tsb.js"></script>
   <script src="js/tolgates.js"></script>
+  <script src="js/wijzigingen.js"></script>
   <script src="js/rechten.js"></script>
   <script src="js/app.js"></script>
 </body>

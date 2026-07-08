@@ -44,6 +44,15 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
     per maand — met een periode-filter (cumulatief t/m een maand). De
     bestedingsgraad staat ook als kaart op het Dashboard en de cijfers gaan mee
     in de AI-rapportages.
+- **Wijzigingen** — wijzigingenregister op de TSB-posten (begroting, uren &
+  kosten) per werkpakket: indiener, datum, korte omschrijving, toelichting en
+  financiële impact, met statusflow *nieuw → ingediend → goedgekeurd/afgekeurd*
+  (afkeuren vereist een toelichting). Geselecteerde wijzigingen bundel je in een
+  **VTW** (Verzoek Tot Wijziging): de AI stelt de complete notitie op volgens
+  het VTW-format uit **Beheer → Instellingen** (of, zonder format, een eigen
+  professioneel standaardformat) en gebruikt daarbij de wijzigingen plus de
+  beschikbare projectinformatie. VTW's worden bewaard in een register en zijn
+  te downloaden als HTML.
 - **Mijn projecten** — alleen de werkpakketten waaraan jij bent toegewezen, met
   je eigen taken voor de komende periode.
 - **Activiteiten / Doorlooptijden** — referentiebibliotheek met per stap een
