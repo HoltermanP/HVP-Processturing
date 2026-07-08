@@ -26,16 +26,22 @@ const WZ_STATUS = {
   afgekeurd:   { label: 'Afgekeurd',   kleur: '#ef4444' },
 };
 const WZ_POSTEN = [
-  ['begroting', 'TSB-begrotingspost'],
-  ['uren', 'Uren'],
-  ['kosten', 'Kosten'],
+  ['tsbpost', 'Post uit TSB-format'],
+  ['vrij', 'Vrije omschrijving'],
 ];
+// Oudere records gebruikten begroting/uren/kosten als postsoort.
+const WZ_POST_LEGACY = { begroting: 'tsbpost', uren: 'vrij', kosten: 'vrij' };
+function wzPostSoort(wz) { return WZ_POST_LEGACY[wz.post] || wz.post || 'vrij'; }
 
 // Niet-persistente UI-staat.
 const WzUI = { filter: 'alle', selectie: new Set(), vtwOpen: null };
 
 /* -------------------------------- Helpers -------------------------------- */
-function wzPostLabel(p) { const m = WZ_POSTEN.find((x) => x[0] === p); return m ? m[1] : p; }
+function wzPostLabel(p) {
+  const soort = WZ_POST_LEGACY[p] || p;
+  const m = WZ_POSTEN.find((x) => x[0] === soort);
+  return m ? m[1] : p;
+}
 function wzById(id) { return (State.wijzigingen || []).find((w) => w.id === id); }
 function vtwById(id) { return (State.vtws || []).find((v) => v.id === id); }
 function magWzBeheren() { return !window.Auth || Auth.magVolledig(); }
@@ -50,6 +56,30 @@ function wzTsbProject(projectNaam) {
   const d = State.tsb || {};
   return (d.projecten || []).find((p) => p.projectNaam === projectNaam) || null;
 }
+// Bron voor formatposten: de TSB van het project (tarieven/inzet van het
+// project zelf), anders het eerste ingeladen TSB-format als terugval.
+function wzPostBron(projectNaam) {
+  const tp = wzTsbProject(projectNaam);
+  if (tp) return { doc: tp, bron: `TSB van ${tp.projectNaam}` };
+  const fmt = ((State.tsb || {}).formats || [])[0];
+  if (fmt) return { doc: fmt, bron: `format "${fmt.naam}"` };
+  return null;
+}
+function wzVindItem(doc, itemId) {
+  for (const f of (doc && doc.fasen) || []) for (const g of f.groepen || []) {
+    const i = (g.items || []).find((x) => x.id === itemId);
+    if (i) return i;
+  }
+  return null;
+}
+// Impact van een formatpost: hoeveelheid × inzet (uur/eenheid) × tarief,
+// via de gedeelde TSB-rekenmodule.
+function wzBerekenPost(doc, itemId, hoeveelheid) {
+  const item = wzVindItem(doc, itemId);
+  if (!item || typeof tsbBerekenItem !== 'function') return null;
+  const c = tsbBerekenItem({ ...item, hoeveelheid }, doc.rollen || []);
+  return { eenheid: item.eenheid || 'st', uren: c.totaalUren, bedrag: c.totaalBedrag };
+}
 // Regelitems van een TSB-project als platte lijst voor de koppel-select.
 function wzTsbItems(tp) {
   const uit = [];
@@ -61,13 +91,14 @@ function wzTsbItems(tp) {
 function wzTsbItemLabel(wz) {
   if (!wz.tsbItemId) return '';
   const wp = wpById(wz.wpId);
-  const tp = wp ? wzTsbProject(wp.project) : null;
-  const item = wzTsbItems(tp).find((i) => i.id === wz.tsbItemId);
+  const bron = wp ? wzPostBron(wp.project) : null;
+  const item = bron ? wzTsbItems(bron.doc).find((i) => i.id === wz.tsbItemId) : null;
   return item ? item.label : '';
 }
 function wzImpactHtml(wz) {
   const delen = [];
-  if (wz.uren) delen.push(`${(+wz.uren).toLocaleString('nl-NL')} uur`);
+  if (wz.hoeveelheid) delen.push(`${(+wz.hoeveelheid).toLocaleString('nl-NL')} ${wz.eenheid || 'st'}`);
+  if (wz.uren) delen.push(`${(+wz.uren).toLocaleString('nl-NL', { maximumFractionDigits: 1 })} uur`);
   if (wz.bedrag) delen.push(wzGeld(wz.bedrag));
   return delen.length ? delen.join(' · ') : '—';
 }
@@ -94,17 +125,19 @@ function renderWijzigingen() {
   // Opruimen: selectie kan verouderde id's bevatten.
   WzUI.selectie.forEach((id) => { if (!wzById(id)) WzUI.selectie.delete(id); });
 
-  const tel = { totaal: alle.length };
-  Object.keys(WZ_STATUS).forEach((s) => { tel[s] = alle.filter(({ wz }) => wz.status === s).length; });
+  // Per status zowel het aantal als de totale kosten tonen.
+  const som = (lijst) => lijst.reduce((s, { wz }) => s + (+wz.bedrag || 0), 0);
+  const perStatus = (s) => alle.filter(({ wz }) => wz.status === s);
   const tiles = [
-    { tf: 'alle', cls: 'blauw', val: tel.totaal, label: 'totaal' },
-    { tf: 'nieuw', cls: '', val: tel.nieuw, label: 'nieuw' },
-    { tf: 'ingediend', cls: 'amber', val: tel.ingediend, label: 'ingediend' },
-    { tf: 'goedgekeurd', cls: 'groen', val: tel.goedgekeurd, label: 'goedgekeurd' },
-    { tf: 'afgekeurd', cls: 'rood', val: tel.afgekeurd, label: 'afgekeurd' },
+    { tf: 'alle', cls: 'blauw', val: alle.length, geld: som(alle), label: 'totaal' },
+    { tf: 'nieuw', cls: '', val: perStatus('nieuw').length, geld: som(perStatus('nieuw')), label: 'nieuw' },
+    { tf: 'ingediend', cls: 'amber', val: perStatus('ingediend').length, geld: som(perStatus('ingediend')), label: 'ingediend' },
+    { tf: 'goedgekeurd', cls: 'groen', val: perStatus('goedgekeurd').length, geld: som(perStatus('goedgekeurd')), label: 'goedgekeurd' },
+    { tf: 'afgekeurd', cls: 'rood', val: perStatus('afgekeurd').length, geld: som(perStatus('afgekeurd')), label: 'afgekeurd' },
   ];
   el('#wzKpis').innerHTML = tiles.map((t) =>
-    `<div class="tstat ${t.cls} klikbaar${WzUI.filter === t.tf ? ' actief' : ''}" data-tf="${t.tf}" tabindex="0" role="button"><b>${t.val}</b><span>${t.label}</span></div>`).join('');
+    `<div class="tstat ${t.cls} klikbaar${WzUI.filter === t.tf ? ' actief' : ''}" data-tf="${t.tf}" tabindex="0" role="button">
+      <b>${t.val}</b><span>${t.label}</span><span class="wz-eur">${wzGeld(t.geld)}</span></div>`).join('');
   els('#wzKpis .tstat[data-tf]').forEach((t) => {
     const zet = () => { WzUI.filter = WzUI.filter === t.dataset.tf ? 'alle' : t.dataset.tf; renderWijzigingen(); };
     t.addEventListener('click', zet);
@@ -165,21 +198,31 @@ function renderWijzigingen() {
 function wzForm(item) {
   item = item || {};
   const wpSel = item.wpId || '';
+  const soort = item.post ? wzPostSoort(item) : 'tsbpost';
   const wpOpts = State.werkpakketten.slice().sort((a, b) => (a.project + a.wp).localeCompare(b.project + b.wp))
     .map((w) => `<option value="${htmlEsc(w.id)}"${w.id === wpSel ? ' selected' : ''}>${htmlEsc(w.project)} · ${htmlEsc(apdVan(w))} · ${htmlEsc(w.wp)}</option>`).join('');
-  const postOpts = WZ_POSTEN.map(([v, l]) => `<option value="${v}"${v === (item.post || 'begroting') ? ' selected' : ''}>${l}</option>`).join('');
+  const postOpts = WZ_POSTEN.map(([v, l]) => `<option value="${v}"${v === soort ? ' selected' : ''}>${l}</option>`).join('');
   // Statuskeuzes: beoordelen (goed-/afkeuren) is aan ontwerpleider/manager.
   const statussen = magWzBeheren() ? Object.keys(WZ_STATUS) : ['nieuw', 'ingediend'];
   const statusOpts = statussen.map((k) => `<option value="${k}"${k === (item.status || 'nieuw') ? ' selected' : ''}>${WZ_STATUS[k].label}</option>`).join('');
   return `
     <div class="modal-veld"><label>Werkpakket</label><select id="wzWp">${wpOpts}</select></div>
     <div class="modal-rij">
-      <div class="modal-veld"><label>Post (uit de TSB)</label><select id="wzPost">${postOpts}</select></div>
-      <div class="modal-veld"><label>TSB-begrotingspost (optioneel)</label><select id="wzTsbItem"><option value="">—</option></select></div>
+      <div class="modal-veld"><label>Soort post</label><select id="wzPost">${postOpts}</select>
+        <span class="hint">Kies een post uit het TSB-format, of “Vrije omschrijving” voor zaken die niet in het format staan.</span></div>
+      <div class="modal-veld" id="wzItemVeld"><label>Post uit het format</label><select id="wzTsbItem"><option value="">—</option></select>
+        <span class="hint" id="wzItemBron"></span></div>
+    </div>
+    <div class="modal-rij" id="wzHvRij">
+      <div class="modal-veld"><label>Hoeveelheid (<span id="wzEenheid">st</span>)</label>
+        <input id="wzHoeveelheid" type="number" step="any" min="0" value="${item.hoeveelheid ?? ''}" placeholder="bijv. 2">
+        <span class="hint">Uren en kosten worden berekend uit de standaard-inzet en tarieven van het format.</span></div>
+      <div class="modal-veld"><label>Berekende impact</label>
+        <div class="keng-veld" id="wzBerekend" style="justify-content:flex-start">—</div></div>
     </div>
     <div class="modal-veld"><label>Korte omschrijving</label><input id="wzOmschr" value="${htmlEsc(item.omschrijving || '')}" placeholder="bijv. Extra boring t.h.v. duiker DR04"></div>
     <div class="modal-veld"><label>Toelichting</label><textarea id="wzToelichting" rows="4" placeholder="Aanleiding, scope en gevolgen van de wijziging…">${htmlEsc(item.toelichting || '')}</textarea></div>
-    <div class="modal-rij">
+    <div class="modal-rij" id="wzVrijRij">
       <div class="modal-veld"><label>Impact — uren (optioneel)</label><input id="wzUren" type="number" step="any" value="${item.uren ?? ''}" placeholder="bijv. 24"></div>
       <div class="modal-veld"><label>Impact — bedrag € (optioneel)</label><input id="wzBedrag" type="number" step="any" value="${item.bedrag ?? ''}" placeholder="bijv. 8500"></div>
     </div>
@@ -199,20 +242,46 @@ function wzForm(item) {
     </div>`;
 }
 
-// Vul de regelitem-select op basis van het gekozen werkpakket + post.
+// Vul de formatpost-select op basis van het gekozen werkpakket, en schakel
+// tussen de berekende (formatpost) en vrije invoervelden.
 function wzVulTsbItems(huidigItemId) {
   const wp = wpById(el('#wzWp').value);
-  const post = el('#wzPost').value;
+  const soort = el('#wzPost').value;
   const sel = el('#wzTsbItem');
-  const tp = wp ? wzTsbProject(wp.project) : null;
-  if (post !== 'begroting' || !tp) {
-    sel.innerHTML = `<option value="">${post !== 'begroting' ? '— n.v.t. —' : '— geen TSB voor dit project —'}</option>`;
+  const bron = wp ? wzPostBron(wp.project) : null;
+  const vrij = soort === 'vrij' || !bron;
+  el('#wzItemVeld').style.display = soort === 'vrij' ? 'none' : '';
+  el('#wzHvRij').style.display = vrij ? 'none' : '';
+  el('#wzVrijRij').style.display = vrij ? '' : 'none';
+  if (soort !== 'vrij' && !bron) {
+    sel.innerHTML = '<option value="">— geen TSB-format ingeladen —</option>';
     sel.disabled = true;
+    el('#wzItemBron').textContent = 'Laad eerst een format/TSB in via het TSB-tabblad, of kies “Vrije omschrijving”.';
     return;
   }
+  if (vrij) { sel.disabled = true; return; }
   sel.disabled = false;
-  sel.innerHTML = '<option value="">— kies begrotingspost —</option>' + wzTsbItems(tp)
+  el('#wzItemBron').textContent = `Posten uit ${bron.bron}.`;
+  sel.innerHTML = '<option value="">— kies post —</option>' + wzTsbItems(bron.doc)
     .map((i) => `<option value="${htmlEsc(i.id)}"${i.id === huidigItemId ? ' selected' : ''}>${htmlEsc(i.label)}</option>`).join('');
+  wzHerbereken();
+}
+
+// Live berekening: hoeveelheid × standaard-inzet × tarieven uit het format.
+function wzHerbereken() {
+  const uit = el('#wzBerekend'); if (!uit) return;
+  const wp = wpById(el('#wzWp').value);
+  const bron = wp ? wzPostBron(wp.project) : null;
+  const itemId = el('#wzTsbItem').value;
+  const item = bron ? wzVindItem(bron.doc, itemId) : null;
+  el('#wzEenheid').textContent = item ? (item.eenheid || 'st') : 'st';
+  const hoeveelheid = +String(el('#wzHoeveelheid').value || '').replace(',', '.');
+  if (!item || !(hoeveelheid > 0)) { uit.textContent = '—'; delete uit.dataset.uren; delete uit.dataset.bedrag; return; }
+  const c = wzBerekenPost(bron.doc, itemId, hoeveelheid);
+  uit.innerHTML = `<strong>${c.uren.toLocaleString('nl-NL', { maximumFractionDigits: 1 })} uur · ${wzGeld(c.bedrag)}</strong>`;
+  uit.dataset.uren = c.uren;
+  uit.dataset.bedrag = c.bedrag;
+  uit.dataset.eenheid = c.eenheid;
 }
 
 function openWijziging(item) {
@@ -222,29 +291,47 @@ function openWijziging(item) {
   }
   openModal(item ? `Wijziging bewerken` : 'Wijziging registreren', wzForm(item));
   wzVulTsbItems(item && item.tsbItemId);
+  if (item && item.hoeveelheid) wzHerbereken();
   const toonAfkeur = () => { el('#wzAfkeurVeld').style.display = el('#wzStatus').value === 'afgekeurd' ? '' : 'none'; };
   toonAfkeur();
   el('#wzStatus').addEventListener('change', toonAfkeur);
   el('#wzWp').addEventListener('change', () => wzVulTsbItems(null));
   el('#wzPost').addEventListener('change', () => wzVulTsbItems(null));
+  el('#wzTsbItem').addEventListener('change', wzHerbereken);
+  el('#wzHoeveelheid').addEventListener('input', wzHerbereken);
 
   el('#wzOpslaan').addEventListener('click', () => {
     const wpId = el('#wzWp').value;
     const omschrijving = el('#wzOmschr').value.trim();
     const status = el('#wzStatus').value;
     const afkeur = el('#wzAfkeur') ? el('#wzAfkeur').value.trim() : '';
+    const soort = el('#wzPost').value;
+    const bron = wzPostBron((wpById(wpId) || {}).project);
+    const formatpost = soort === 'tsbpost' && !!bron;
     if (!wpId) { toast('Kies een werkpakket', 'fout'); return; }
     if (!omschrijving) { toast('Vul een korte omschrijving in', 'fout'); return; }
     if (status === 'afgekeurd' && !afkeur) { toast('Vul een toelichting bij de afkeuring in', 'fout'); el('#wzAfkeur').focus(); return; }
+    const berekend = el('#wzBerekend').dataset;
+    const hoeveelheid = +String(el('#wzHoeveelheid').value || '').replace(',', '.');
+    if (formatpost) {
+      if (!el('#wzTsbItem').value) { toast('Kies een post uit het format', 'fout'); return; }
+      if (!(hoeveelheid > 0)) { toast('Vul een hoeveelheid in', 'fout'); el('#wzHoeveelheid').focus(); return; }
+    }
     const rec = {
       id: (item && item.id) || nieuwId('wz'),
       wpId,
-      post: el('#wzPost').value,
-      tsbItemId: el('#wzTsbItem').disabled ? null : (el('#wzTsbItem').value || null),
+      post: formatpost ? 'tsbpost' : 'vrij',
+      tsbItemId: formatpost ? el('#wzTsbItem').value : null,
+      hoeveelheid: formatpost ? hoeveelheid : null,
+      eenheid: formatpost ? (berekend.eenheid || 'st') : null,
       omschrijving,
       toelichting: el('#wzToelichting').value.trim(),
-      uren: el('#wzUren').value === '' ? null : +String(el('#wzUren').value).replace(',', '.'),
-      bedrag: el('#wzBedrag').value === '' ? null : +String(el('#wzBedrag').value).replace(',', '.'),
+      uren: formatpost
+        ? (berekend.uren != null ? +berekend.uren : null)
+        : (el('#wzUren').value === '' ? null : +String(el('#wzUren').value).replace(',', '.')),
+      bedrag: formatpost
+        ? (berekend.bedrag != null ? +berekend.bedrag : null)
+        : (el('#wzBedrag').value === '' ? null : +String(el('#wzBedrag').value).replace(',', '.')),
       ingediendDoor: el('#wzDoor').value.trim() || (window.Auth ? Auth.naam() : ''),
       datum: el('#wzDatum').value || isoDatum(new Date()),
       status,
@@ -279,7 +366,9 @@ function vtwData(wijzigingen) {
       werkpakket: wp ? `${wp.project} · ${apdVan(wp)} · ${wp.wp}` : wz.wpId,
       project: wp ? wp.project : '',
       post: wzPostLabel(wz.post),
-      begrotingspost: wzTsbItemLabel(wz) || null,
+      formatpost: wzTsbItemLabel(wz) || null,
+      hoeveelheid: wz.hoeveelheid ? `${wz.hoeveelheid} ${wz.eenheid || 'st'}` : null,
+      berekeningsgrondslag: wz.hoeveelheid ? 'hoeveelheid × standaard-inzet × tarieven uit het TSB-format' : 'handmatig opgegeven',
       omschrijving: wz.omschrijving,
       toelichting: wz.toelichting,
       impactUren: wz.uren, impactBedrag: wz.bedrag,
@@ -416,23 +505,38 @@ function toonVtw(vtw) {
     + `<div class="rapport-meta" style="margin-top:22px">${htmlEsc(vtw.nummer)} · opgesteld ${fmtDatum(parseDatum(vtw.datum))} door ${htmlEsc(vtw.gemaaktDoor || '—')} · format: ${vtw.formatBron === 'beheer' ? 'beheerscherm' : 'AI'} · model ${htmlEsc(vtw.model || '')}</div>`;
 }
 
+// Totale impact van een VTW: de som over de gebundelde wijzigingen.
+function vtwImpact(vtw) {
+  return (vtw.wijzigingIds || []).map(wzById).filter(Boolean)
+    .reduce((s, wz) => ({ bedrag: s.bedrag + (+wz.bedrag || 0), uren: s.uren + (+wz.uren || 0) }), { bedrag: 0, uren: 0 });
+}
+
 function renderVtwLijst() {
   const node = el('#vtwLijst'); if (!node) return;
   const vtws = (State.vtws || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
-  const rows = vtws.map((v) => `<tr class="rij" data-vtw="${htmlEsc(v.id)}">
+  const totaal = vtws.reduce((s, v) => { const i = vtwImpact(v); return { bedrag: s.bedrag + i.bedrag, uren: s.uren + i.uren, wz: s.wz + (v.wijzigingIds || []).length }; }, { bedrag: 0, uren: 0, wz: 0 });
+  const rows = vtws.map((v) => {
+    const impact = vtwImpact(v);
+    return `<tr class="rij" data-vtw="${htmlEsc(v.id)}">
     <td><strong>${htmlEsc(v.nummer)}</strong></td>
     <td>${htmlEsc(v.titel)}</td>
     <td>${fmtDatum(parseDatum(v.datum))}</td>
     <td class="num">${(v.wijzigingIds || []).length}</td>
+    <td class="num"><strong>${wzGeld(impact.bedrag)}</strong>${impact.uren ? `<div class="sub">${impact.uren.toLocaleString('nl-NL', { maximumFractionDigits: 1 })} uur</div>` : ''}</td>
     <td>${htmlEsc(v.gemaaktDoor || '—')}</td>
     <td>${v.formatBron === 'beheer' ? 'beheerscherm' : 'AI'}</td>
     <td class="reg-acties">${magWzBeheren() ? `<button class="mini-knop" data-vtwweg="${htmlEsc(v.id)}">verwijder</button>` : ''}</td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   node.innerHTML = `<div class="card">
     <div class="card-kop"><h2>VTW's<span class="tel">${vtws.length}</span></h2><span class="hint">Klik op een rij om de VTW te bekijken</span></div>
+    <div class="taken-stats" style="margin-bottom:14px">
+      <div class="tstat blauw"><b>${vtws.length}</b><span>VTW's</span><span class="wz-eur">${wzGeld(totaal.bedrag)}</span></div>
+      <div class="tstat"><b>${totaal.wz}</b><span>wijzigingen in VTW's</span><span class="wz-eur">${totaal.uren.toLocaleString('nl-NL', { maximumFractionDigits: 1 })} uur</span></div>
+    </div>
     <div class="tabel-wrap"><table class="tabel" style="min-width:0">
-      <thead><tr><th>Nummer</th><th>Titel</th><th>Datum</th><th class="num">Wijzigingen</th><th>Opgesteld door</th><th>Format</th><th></th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="7" class="leeg">Nog geen VTW’s opgesteld. Selecteer wijzigingen en klik op “VTW maken”.</td></tr>'}</tbody>
+      <thead><tr><th>Nummer</th><th>Titel</th><th>Datum</th><th class="num">Wijzigingen</th><th class="num">Kosten</th><th>Opgesteld door</th><th>Format</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" class="leeg">Nog geen VTW’s opgesteld. Selecteer wijzigingen en klik op “VTW maken”.</td></tr>'}</tbody>
     </table></div></div>`;
   els('#vtwLijst .rij').forEach((tr) => tr.addEventListener('click', (e) => {
     if (e.target.closest('[data-vtwweg]')) return;
