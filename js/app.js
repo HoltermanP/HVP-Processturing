@@ -1922,7 +1922,14 @@ async function init() {
   el('#filterEngineer').addEventListener('change', (e) => { State.filters.engineer = e.target.value; render(); });
   el('#filterFase').addEventListener('change', (e) => { State.filters.fase = e.target.value; render(); });
   el('#filterRisico').addEventListener('change', (e) => { State.filters.risico = e.target.value; render(); });
-  el('#filterZoek').addEventListener('input', (e) => { State.filters.zoek = e.target.value; renderOverzicht(); renderPlanning(); renderTaken(); });
+  el('#filterZoek').addEventListener('input', (e) => {
+    State.filters.zoek = e.target.value;
+    renderFilterIndicator();
+    // Alle weergaven die het zoekfilter gebruiken direct meeverversen.
+    renderOverzicht(); renderPlanning(); renderTaken();
+    renderVergunningen(); renderRisicos();
+    if (typeof renderWijzigingen === 'function') renderWijzigingen();
+  });
   el('#filterReset').addEventListener('click', () => { State.filters = { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' }; State.takenFilter = 'alle'; el('#filterZoek').value = ''; render(); });
 
   el('#rapType').addEventListener('change', renderRapportenControls);
