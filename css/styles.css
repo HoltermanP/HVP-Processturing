@@ -643,9 +643,10 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .modal-kop{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;border-radius:16px 16px 0 0}
 .modal-kop h3{font-size:17px}
 .modal-body{padding:20px 22px}
-.modal-veld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.modal-veld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;min-width:0}
 .modal-veld label{font-size:12px;font-weight:650;color:var(--ink-2)}
-.modal-veld input,.modal-veld select,.modal-veld textarea{padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;background:#fff;color:var(--ink)}
+.modal-veld input,.modal-veld select,.modal-veld textarea{padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;background:#fff;color:var(--ink);width:100%;max-width:100%;box-sizing:border-box}
+.modal-veld select{text-overflow:ellipsis}
 .modal-veld input:focus,.modal-veld select:focus,.modal-veld textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
 .modal-veld textarea{resize:vertical}
 .modal-rij{display:grid;grid-template-columns:1fr 1fr;gap:14px}

@@ -207,12 +207,10 @@ function wzForm(item) {
   const statusOpts = statussen.map((k) => `<option value="${k}"${k === (item.status || 'nieuw') ? ' selected' : ''}>${WZ_STATUS[k].label}</option>`).join('');
   return `
     <div class="modal-veld"><label>Werkpakket</label><select id="wzWp">${wpOpts}</select></div>
-    <div class="modal-rij">
-      <div class="modal-veld"><label>Soort post</label><select id="wzPost">${postOpts}</select>
-        <span class="hint">Kies een post uit het TSB-format, of “Vrije omschrijving” voor zaken die niet in het format staan.</span></div>
-      <div class="modal-veld" id="wzItemVeld"><label>Post uit het format</label><select id="wzTsbItem"><option value="">—</option></select>
-        <span class="hint" id="wzItemBron"></span></div>
-    </div>
+    <div class="modal-veld"><label>Soort post</label><select id="wzPost">${postOpts}</select>
+      <span class="hint">Kies een post uit het TSB-format, of “Vrije omschrijving” voor zaken die niet in het format staan.</span></div>
+    <div class="modal-veld" id="wzItemVeld"><label>Post uit het format</label><select id="wzTsbItem"><option value="">—</option></select>
+      <span class="hint" id="wzItemBron"></span></div>
     <div class="modal-rij" id="wzHvRij">
       <div class="modal-veld"><label>Hoeveelheid (<span id="wzEenheid">st</span>)</label>
         <input id="wzHoeveelheid" type="number" step="any" min="0" value="${item.hoeveelheid ?? ''}" placeholder="bijv. 2">
