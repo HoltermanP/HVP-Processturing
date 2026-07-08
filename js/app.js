@@ -1270,6 +1270,7 @@ function renderDashboard() {
   renderTijdlijn();
   if (typeof renderDashboardTsb === 'function') renderDashboardTsb();
   if (typeof renderDashboardTolgates === 'function') renderDashboardTolgates();
+  if (typeof renderDashboardWijzigingen === 'function') renderDashboardWijzigingen();
 }
 
 /* ----------------------- Dashboard: interactie & visuals ----------------- */
@@ -1516,6 +1517,7 @@ function bouwRapportData(scope, van, tot, label) {
     vooruitblik: { naderendeMijlpalen: mpKomend.slice(0, 25), reedsTeLaat, dreigtTeLaat, nietGetoond },
     registers: registerRapportData(scope),
     tsb: typeof tsbRapportData === 'function' ? tsbRapportData(scope) : null,
+    wijzigingen: typeof wijzigingenRapportData === 'function' ? wijzigingenRapportData(scope) : null,
     perProject,
   };
 }
@@ -1537,6 +1539,7 @@ Verplichte structuur:
 ## Terugblik afgelopen periode   (mijlpalen die gepland stonden en hun status; voortgangsontwikkeling indien beschikbaar)
 ## Voortgang & KPI's   (kerncijfers; gebruik een korte Markdown-tabel)
 ## Financiën — TSB, uren & kosten   (ALLEEN als het veld "tsb" in de data gevuld is: begroot versus besteed in uren en euro's per project, opvallende over-/onderschrijdingen (pctBesteedBedrag > 100 = overschrijding) en wat dat betekent voor de sturing; laat deze sectie anders volledig weg)
+## Wijzigingen & VTW's   (ALLEEN als het veld "wijzigingen" in de data gevuld is: openstaande en ingediende wijzigingen met hun financiële impact, de opgestelde VTW's met totaalbedrag, en welke besluiten van de opdrachtgever nog openstaan; compacte tabel toegestaan; laat deze sectie anders volledig weg)
 ## Vroegsignalering — dreigt te laat   (acties die nu om een besluit/start vragen vóór hun uiterste startdatum; als tabel met uiterste startdatum en fase-einde, geprioriteerd)
 ## Reeds te laat & blokkades   (over-datum acties, geblokkeerd/issue; betrek het risico-register (top-risico's met score) en vergunningen/ZRO die over de besluitdatum zijn)
 ## Vooruitblik komende periode   (naderende mijlpalen, openstaande vergunningen/ZRO en wat er concreet gedaan moet worden)
@@ -1660,12 +1663,19 @@ function rapportKopHtml(data) {
     tegel(reeds, 'reeds te laat', 'rood'),
     tegel(data.terugblik.mijlpalenInPeriode.length, 'mijlpalen in periode'),
   ].join('');
+  const fmtK = (n) => '€ ' + Math.round(n).toLocaleString('nl-NL');
   if (data.tsb && data.tsb.totalen) {
-    const fmtK = (n) => '€ ' + Math.round(n).toLocaleString('nl-NL');
     const pct = data.tsb.totalen.begrootBedrag ? Math.round((data.tsb.totalen.totaalBesteed / data.tsb.totalen.begrootBedrag) * 100) : null;
     tegels += tegel(fmtK(data.tsb.totalen.begrootBedrag), 'begroot (TSB)')
       + tegel(fmtK(data.tsb.totalen.totaalBesteed) + (pct != null ? ` · ${pct}%` : ''), 'besteed', pct != null && pct > 100 ? 'rood' : 'groen')
       + tegel(fmtK(data.tsb.totalen.restbudget), 'restbudget', data.tsb.totalen.restbudget < 0 ? 'rood' : '');
+  }
+  if (data.wijzigingen && data.wijzigingen.perStatus) {
+    const ps = data.wijzigingen.perStatus;
+    const open = { aantal: ps.openstaand.aantal + ps.ingediend.aantal, bedrag: ps.openstaand.bedrag + ps.ingediend.bedrag };
+    const vtwBedrag = (data.wijzigingen.vtws || []).reduce((s, v) => s + (+v.bedrag || 0), 0);
+    tegels += tegel(`${open.aantal} · ${fmtK(open.bedrag)}`, 'wijzigingen open/ingediend', open.aantal ? 'amber' : '')
+      + tegel(`${(data.wijzigingen.vtws || []).length} · ${fmtK(vtwBedrag)}`, "VTW's");
   }
   return `<div class="rapport-kop">
       <div class="rk-brand"><div class="rk-logo">HVP</div>

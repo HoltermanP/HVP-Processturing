@@ -192,6 +192,9 @@ function renderWijzigingen() {
   // VTW-format in Beheer meevullen (bewerken alleen voor ontwerpleider/manager).
   const ta = el('#instVtwFormat');
   if (ta && document.activeElement !== ta) ta.value = State.instellingen.vtwFormat || '';
+  // Dashboardkaart in de pas houden: tabwissel doet geen volledige render en
+  // alle mutaties komen langs renderWijzigingen.
+  renderDashboardWijzigingen();
 }
 
 /* ----------------------- Wijziging toevoegen/bewerken -------------------- */
@@ -563,6 +566,91 @@ function downloadVtwHtml() {
   toast('VTW gedownload als HTML', 'ok');
 }
 
+/* ------------------- Dashboard-kaart & rapportagedata -------------------- */
+function wzInScope(scope) {
+  return (State.wijzigingen || []).filter((wz) => {
+    const wp = wpById(wz.wpId);
+    return wp && (scope === 'portfolio' || wp.project === scope);
+  });
+}
+function vtwInScope(scope) {
+  if (scope === 'portfolio') return State.vtws || [];
+  return (State.vtws || []).filter((v) => (v.wijzigingIds || []).some((id) => {
+    const wz = wzById(id); const wp = wz && wpById(wz.wpId);
+    return wp && wp.project === scope;
+  }));
+}
+function wzTelling(lijst) {
+  return {
+    aantal: lijst.length,
+    bedrag: lijst.reduce((s, wz) => s + (+wz.bedrag || 0), 0),
+    uren: lijst.reduce((s, wz) => s + (+wz.uren || 0), 0),
+  };
+}
+
+// Dashboard: openstaande en ingediende wijzigingen + VTW's, met aantal én
+// kosten, binnen de gekozen scope (portfolio of project). Klik → register.
+function renderDashboardWijzigingen() {
+  const kaart = el('#dashWzKaart'); if (!kaart) return;
+  const scope = State.dashScope;
+  const lijst = wzInScope(scope);
+  const vtws = vtwInScope(scope);
+  if (!lijst.length && !vtws.length) { kaart.style.display = 'none'; return; }
+  kaart.style.display = '';
+  const per = (s) => wzTelling(lijst.filter((wz) => wz.status === s));
+  const open = per('nieuw'), ingediend = per('ingediend'), goedgekeurd = per('goedgekeurd');
+  const vtwTot = vtws.reduce((s, v) => { const i = vtwImpact(v); return { bedrag: s.bedrag + i.bedrag }; }, { bedrag: 0 });
+  const tiles = [
+    { tf: 'nieuw', cls: '', val: open.aantal, label: 'openstaande wijzigingen', geld: open.bedrag },
+    { tf: 'ingediend', cls: 'amber', val: ingediend.aantal, label: 'ingediende wijzigingen', geld: ingediend.bedrag },
+    { tf: 'goedgekeurd', cls: 'groen', val: goedgekeurd.aantal, label: 'goedgekeurde wijzigingen', geld: goedgekeurd.bedrag },
+    { tf: 'alle', cls: 'blauw', val: vtws.length, label: "VTW's", geld: vtwTot.bedrag },
+  ];
+  el('#dashWz').innerHTML = tiles.map((t) =>
+    `<div class="tstat ${t.cls} klikbaar" data-tf="${t.tf}" tabindex="0" role="button" title="Klik voor het wijzigingenregister">
+      <b>${t.val}</b><span>${t.label}</span><span class="wz-eur">${wzGeld(t.geld)}</span></div>`).join('');
+  els('#dashWz .tstat').forEach((t) => {
+    const open = () => {
+      WzUI.filter = t.dataset.tf;
+      renderWijzigingen(); toonTab('wijzigingen');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    t.addEventListener('click', open);
+    t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  });
+}
+
+// Samenvatting voor de AI-maand/kwartaalrapportage.
+function wijzigingenRapportData(scope) {
+  const lijst = wzInScope(scope);
+  const vtws = vtwInScope(scope);
+  if (!lijst.length && !vtws.length) return null;
+  const per = (s) => wzTelling(lijst.filter((wz) => wz.status === s));
+  const openstaand = lijst.filter((wz) => wz.status === 'nieuw' || wz.status === 'ingediend')
+    .sort((a, b) => (b.datum || '').localeCompare(a.datum || '')).slice(0, 12)
+    .map((wz) => {
+      const wp = wpById(wz.wpId);
+      return {
+        werkpakket: wp ? `${wp.project} · ${wp.wp}` : '', datum: wz.datum,
+        omschrijving: wz.omschrijving, post: wzPostLabel(wz.post),
+        impactUren: wz.uren, impactBedrag: wz.bedrag,
+        status: (WZ_STATUS[wz.status] || {}).label, ingediendDoor: wz.ingediendDoor,
+      };
+    });
+  return {
+    toelichting: 'Wijzigingen op de TSB-posten per werkpakket; VTW = Verzoek Tot Wijziging (bundel wijzigingen richting opdrachtgever). Bedragen in euro.',
+    perStatus: {
+      openstaand: per('nieuw'), ingediend: per('ingediend'),
+      goedgekeurd: per('goedgekeurd'), afgekeurd: per('afgekeurd'),
+    },
+    openstaandeWijzigingen: openstaand,
+    vtws: vtws.map((v) => {
+      const i = vtwImpact(v);
+      return { nummer: v.nummer, titel: v.titel, datum: v.datum, wijzigingen: (v.wijzigingIds || []).length, bedrag: Math.round(i.bedrag), uren: Math.round(i.uren) };
+    }),
+  };
+}
+
 /* --------------------------------- Init ---------------------------------- */
 function wijzigingenInit() {
   const add = el('#wzToevoegen');
@@ -585,5 +673,7 @@ function wijzigingenInit() {
 /* --------------------------------- Export -------------------------------- */
 if (typeof window !== 'undefined') {
   window.renderWijzigingen = renderWijzigingen;
+  window.renderDashboardWijzigingen = renderDashboardWijzigingen;
+  window.wijzigingenRapportData = wijzigingenRapportData;
   window.wijzigingenInit = wijzigingenInit;
 }
