@@ -24,13 +24,11 @@
         <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
         <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
         <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
-        <button class="tab" data-tab="risico"><span class="ico">⚠</span>Risico's</button>
+        <button class="tab" data-tab="zro"><span class="ico">⚖</span>ZRO</button>
         <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
         <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
         <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
         <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
-        <button class="tab" data-tab="activiteiten"><span class="ico">≣</span>Activiteiten</button>
-        <button class="tab" data-tab="doorlooptijden"><span class="ico">⏱</span>Doorlooptijden</button>
         <button class="tab" data-tab="toewijzen"><span class="ico">⇄</span>Toewijzen</button>
         <button class="tab" data-tab="accounts"><span class="ico">☖</span>Accounts</button>
         <button class="tab" data-tab="beheer"><span class="ico">⚙</span>Beheer</button>
@@ -51,6 +49,7 @@
   </div>
 
   <div class="filterbalk">
+    <button id="navTerug" class="terug-knop" style="display:none" title="Terug naar de vorige pagina">← Terug</button>
     <input id="filterZoek" type="search" placeholder="Zoek project, APD, werkpakket, engineer…">
     <select id="filterProject"></select>
     <select id="filterApd"></select>
@@ -102,7 +101,7 @@
     <!-- ================= PLANNING ================= -->
     <section id="view-planning" class="view">
       <div class="card">
-        <div class="card-kop"><h2>Planning per werkpakket (fasen)</h2><span class="hint">Gekleurde fasen met een vandaag-lijn op de peildatum · klik op een rij voor het detail</span></div>
+        <div class="card-kop"><h2>Planning per project · APD · werkpakket</h2><span class="hint">Gekleurde fasen met mijlpalen (◆) en een vandaag-lijn op de peildatum · klik op een APD-rij om de werkpakketten uit te klappen, klik op een werkpakket voor het detail · een APD is pas fase-gereed (bijv. DO gereed) als alle onderliggende werkpakketten gereed zijn — restpunten (⚑) schuiven door naar de volgende fase en blokkeren de gereedmelding niet</span></div>
         <div id="ganttLegenda" class="legenda"></div>
         <div class="gantt">
           <div id="ganttAs" class="gantt-as"></div>
@@ -127,12 +126,12 @@
       <div id="takenLijst"></div>
     </section>
 
-    <!-- ================= VERGUNNINGEN & ZRO ================= -->
+    <!-- ================= VERGUNNINGEN ================= -->
     <section id="view-vergunningen" class="view">
       <div class="section-kop">
         <div>
-          <h2>Vergunningen &amp; ZRO</h2>
-          <p>Vergunningen, meldingen, toestemmingen en zakelijk recht (ZRO) per werkpakket — met naderende en verstreken besluitdata. Filter met de balk bovenaan of klik op een tegel.</p>
+          <h2>Vergunningen</h2>
+          <p>Vergunningen, meldingen en toestemmingen per werkpakket — met naderende en verstreken besluitdata. Filter met de balk bovenaan of klik op een tegel.</p>
         </div>
         <button class="primair" id="vgToevoegen"><span class="ico">＋</span> Toevoegen</button>
       </div>
@@ -140,20 +139,17 @@
       <div id="vgInhoud"></div>
     </section>
 
-    <!-- ================= RISICO-REGISTER ================= -->
-    <section id="view-risico" class="view">
+    <!-- ================= ZRO / ZAKELIJK RECHT ================= -->
+    <section id="view-zro" class="view">
       <div class="section-kop">
         <div>
-          <h2>Risico-register</h2>
-          <p>Risico's per project/werkpakket met kans, impact, beheersmaatregel en eigenaar. Klik een cel in de matrix om te filteren.</p>
+          <h2>ZRO / zakelijk recht</h2>
+          <p>Zakelijk recht overeenkomsten (ZRO) per werkpakket — met naderende en verstreken besluitdata. Filter met de balk bovenaan of klik op een tegel.</p>
         </div>
-        <button class="primair" id="riskToevoegen"><span class="ico">＋</span> Toevoegen</button>
+        <button class="primair" id="zroToevoegen"><span class="ico">＋</span> Toevoegen</button>
       </div>
-      <div class="grid-2">
-        <div class="card"><div class="card-kop"><h2>Risicomatrix</h2><span class="hint">kans × impact · klik om te filteren</span></div><div id="riskMatrix"></div></div>
-        <div class="card"><div class="card-kop"><h2>Kerncijfers</h2></div><div id="riskKpis" class="taken-stats"></div></div>
-      </div>
-      <div id="riskInhoud"></div>
+      <div class="card"><div id="zroKpis" class="taken-stats"></div></div>
+      <div id="zroInhoud"></div>
     </section>
 
     <!-- ================= TSB (begroting, uren & kosten) ================= -->
@@ -338,22 +334,6 @@
       </div>
     </section>
 
-    <!-- ================= ACTIVITEITEN ================= -->
-    <section id="view-activiteiten" class="view">
-      <div class="card">
-        <div class="card-kop"><h2>Activiteitenbibliotheek</h2><span class="hint">Per stap: wat het inhoudt, wat er opgeleverd moet worden en een tip. Bron: Werkpakketactiviteiten beschrijvingen Nulelie 2.0 — ontwerpleider/manager kan de teksten hier aanpassen.</span></div>
-        <div id="refBody" class="ref"></div>
-      </div>
-    </section>
-
-    <!-- ================= DOORLOOPTIJDEN ================= -->
-    <section id="view-doorlooptijden" class="view">
-      <div class="card">
-        <div class="card-kop"><h2>Doorlooptijden per activiteit</h2><span class="hint">In werkdagen — pas aan waar nodig. Wordt gebruikt voor de takenplanning en signalen.</span></div>
-        <div id="dtBody" class="dt"></div>
-      </div>
-    </section>
-
     <!-- ================= TOEWIJZEN (ontwerpleider/manager) ================= -->
     <section id="view-toewijzen" class="view">
       <div class="section-kop">
@@ -432,6 +412,11 @@
             <ul id="instSnapLijst" class="snap-lijst"></ul>
           </div>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-kop"><h2>Activiteiten &amp; doorlooptijden</h2><span class="hint">Per stap: wat het inhoudt, wat er opgeleverd moet worden, een tip én de doorlooptijd in werkdagen (gebruikt voor de takenplanning en signalen). Bron: Werkpakketactiviteiten beschrijvingen Nulelie 2.0 — ontwerpleider/manager kan teksten en doorlooptijden hier aanpassen.</span></div>
+        <div id="refBody" class="ref"></div>
       </div>
     </section>
   </main>

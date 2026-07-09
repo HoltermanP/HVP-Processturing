@@ -219,6 +219,39 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .gseg:hover{opacity:1;outline:2px solid rgba(0,0,0,.18)}
 .vandaag-lijn{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--rood);height:27px;border-radius:2px}
 
+/* --- Hiërarchische planning: Project ▸ APD ▸ Werkpakket --- */
+.gproject{margin-bottom:14px}
+.gproject-kop{font-size:13px;font-weight:700;padding:8px 4px 4px;border-bottom:1px solid var(--line);margin-bottom:4px;position:sticky;left:0}
+.gproject-kop .tel{font-weight:500;font-size:11px;color:var(--sub);margin-left:8px}
+.gapd{border-radius:8px;padding:2px 0;margin-bottom:2px}
+.gapd.open{background:rgba(148,163,184,.07)}
+.grow.apd{height:52px;font-weight:600}
+.gchev{display:inline-block;width:14px;color:var(--sub);font-size:10px}
+.gsub{font-weight:500;font-size:10.5px;color:var(--sub);margin-left:6px}
+.gtrack.apd{height:19px}
+.gtrack.apd .gseg{height:19px}
+.gstatusrij{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 7px 202px}
+.fchip{font-size:10px;font-weight:700;padding:2px 8px;border-radius:9px;border:1px solid var(--c);color:var(--c);background:#fff;cursor:default}
+.fchip.gereed{background:var(--c);color:#fff}
+.fchip.rest{--c:#f97316;border-style:dashed;background:#fff7ed}
+.gwps{margin:2px 0 6px;padding-left:14px}
+.grow.wp{height:48px}
+.grow.wp .glabel{width:174px;flex-basis:174px;font-weight:500}
+.grest{font-size:10px;font-weight:700;color:#c2410c;background:#ffedd5;border-radius:7px;padding:1px 6px;margin-left:6px}
+.gmp{position:absolute;top:50%;width:9px;height:9px;background:#fff;border:2px solid #334155;transform:translate(-50%,-50%) rotate(45deg);border-radius:1.5px;z-index:2}
+.gmp.behaald{background:#334155}
+.gmp-lbl{position:absolute;font-size:9px;font-weight:600;color:var(--sub);white-space:nowrap;transform:translateX(-50%);z-index:2;cursor:default}
+.gmp-lbl.boven{top:-13px}
+.gmp-lbl.onder{bottom:-13px}
+.gmp-lbl.behaald{color:#334155}
+.gmp-lbl.rand-l{transform:none}
+.gmp-lbl.rand-r{transform:translateX(-100%)}
+.leg-mp{width:8px !important;height:8px !important;background:#fff;border:2px solid #334155;transform:rotate(45deg);border-radius:1.5px}
+
+/* Restpunt-status */
+.act.restpunt{background:#fff7ed}
+.tflag.restpunt{background:#ffedd5;color:#c2410c}
+
 /* ============================ Activiteiten-ref ============================ */
 .ref-fase{margin-bottom:24px}
 .ref-fase h3{font-size:14px;border-left:4px solid var(--c);padding-left:11px;margin-bottom:4px}
@@ -384,14 +417,13 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .statbar .stseg{height:100%;transition:.3s}
 .vp-meta{font-size:11.5px;color:var(--sub);margin-top:6px}
 
-/* ============================ Doorlooptijden ============================ */
-.dt-fase{margin-bottom:24px}
-.dt-fase h3{font-size:14px;border-left:4px solid var(--c);padding-left:11px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-.dt-som{font-size:12px;color:var(--sub);font-weight:400}
-.dt-tabel th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);text-align:left;padding:7px 11px}
-.dt-tabel .num,.dt-tabel th.num{text-align:right}
+/* ================ Doorlooptijden (in activiteitenbibliotheek) =========== */
+.dt-som{font-size:12px;color:var(--sub);font-weight:400;margin-left:8px}
+.ref-tabel .dt-cel{width:130px;text-align:right;white-space:nowrap}
+.dt-label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin-bottom:4px}
 .dt-inp{width:74px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;text-align:right;font-size:13px}
 .dt-inp:focus{border-color:var(--accent);outline:none;box-shadow:var(--ring)}
+.dt-inp:disabled{background:var(--line-2,#f1f5f9);color:var(--sub);cursor:not-allowed}
 .aangepast{font-size:10px;background:var(--accent-soft);color:#1d4ed8;padding:2px 7px;border-radius:8px;margin-left:5px;font-weight:600}
 
 /* ============================ Takenoverzicht ============================ */
@@ -759,6 +791,21 @@ select.tsb-inp{text-align:left;width:auto}
 .tsb-fmt-groep{margin:0 0 16px}
 .tsb-fmt-groep .reg-kop{gap:10px;margin-bottom:8px}
 .tsb-fmt-fase>.card-kop h2 .tsb-inp{font-size:14px;font-weight:650}
+
+/* Overzicht: voortgang per fase in de projectkaart (klikbaar per fase) */
+.pf-lijst{display:flex;flex-direction:column;gap:2px;margin:2px 0}
+.pf-rij{display:grid;grid-template-columns:60px 1fr 40px;gap:9px;align-items:center;padding:3px 7px;border-radius:7px;font-size:11.5px;cursor:pointer;transition:.12s}
+.pf-rij:hover{background:var(--accent-soft)}
+.pf-rij:focus-visible{outline:none;box-shadow:var(--ring)}
+.pf-naam{font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-bar{height:9px;background:var(--line-2);border-radius:5px;overflow:hidden}
+.pf-bar span{display:block;height:100%;border-radius:5px;transition:width .3s}
+.pf-pct{text-align:right;font-weight:700;color:var(--ink-2);font-variant-numeric:tabular-nums}
+/* Faseverdeling: klikbare segmenten en legenda */
+#faseBalk .seg.klikbaar{cursor:pointer}
+#faseBalk .seg.klikbaar:hover{filter:brightness(1.12)}
+#faseLegenda .leg.klikbaar{cursor:pointer;border-radius:7px;padding:2px 6px;margin:-2px -6px}
+#faseLegenda .leg.klikbaar:hover{background:var(--accent-soft);color:var(--ink)}
 
 /* Wijzigingenregister: kostenregel in de statustegels */
 .tstat .wz-eur{display:block;font-size:12.5px;font-weight:700;color:var(--ink-2);margin-top:3px;font-variant-numeric:tabular-nums}

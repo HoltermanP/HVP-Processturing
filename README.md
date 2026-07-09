@@ -16,8 +16,13 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
 
 - **Overzicht** — hiërarchische browser (Project ▸ APD ▸ Werkpakket) met KPI's en
   faseverdeling per niveau, en een activiteiten-checklist per werkpakket.
-- **Planning** — een tijdlijn (Gantt) per werkpakket met gekleurde fasen en een
-  "vandaag"-lijn op de peildatum.
+- **Planning** — een hiërarchische tijdlijn (Gantt) per **project ▸ APD ▸
+  werkpakket** met gekleurde fasen, mijlpaalmarkers (◆) en een "vandaag"-lijn op
+  de peildatum. Per APD staat de gereedmelding per fase: een APD is pas
+  **fase-gereed** (bijv. *DO gereed*) als **alle** onderliggende werkpakketten
+  die fase hebben afgerond. Activiteiten kunnen als **restpunt** (⚑) worden
+  gemarkeerd: die schuiven door naar een volgende fase en blokkeren de
+  gereedmelding niet.
 - **Taken** — alles wat de **komende periode** moet gebeuren, berekend uit de
   fasevensters en doorlooptijden. **Kritieke** taken en taken die **gevaar lopen**
   staan bovenaan. De vooruitkijk-**horizon is instelbaar** (2 weken t/m kwartaal).
