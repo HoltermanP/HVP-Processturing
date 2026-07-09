@@ -38,9 +38,10 @@ const HORIZONS = [
 function parseDatum(s) {
   if (!s) return null;
   s = String(s).trim();
-  let m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  // Dag/maand mogen 1 of 2 cijfers zijn (Excel exporteert bijv. "2-12-2025").
+  let m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
   return null;
 }
@@ -1981,9 +1982,17 @@ function parseCsv(tekst) {
 const CSV_STATUSCODE = { 1: 'gereed', 2: 'bezig', 3: 'vertraagd', 4: 'issue', 5: 'nvt', 6: 'restpunt' };
 // Bekende afwijkende activiteitcodes in de CSV t.o.v. de app-codes.
 const CSV_CODE_ALIAS = { '0.03.01': '1.03.01', '2.03': '2.03.02', '2.05': '2.05.01' };
+// Kolomkoppen waarvan het codenummer in de CSV niet klopt bij de activiteit
+// die ernaast staat — de naam is dan leidend, niet het nummer.
+const CSV_NAAM_CORRECTIES = [
+  [/opstellen schetsontwerp/i, '1.01'],      // CSV zegt "0.01", is VO-activiteit 1.01
+  [/kabeltrekplan/i, '1.04.03'],             // CSV zegt "1.04.04", is 1.04.03
+];
 // Bepaal voor een CSV-kolomkop de bijbehorende app-activiteitcode (of null).
 function csvActCode(header) {
-  const m = (header || '').match(/^\s*(\d{1,2}(?:\.\d{1,2}){1,2})\b/);
+  const h = (header || '').replace(/\s+/g, ' ');
+  for (const [re, code] of CSV_NAAM_CORRECTIES) if (re.test(h)) return code;
+  const m = h.match(/^\s*(\d{1,2}(?:\.\d{1,2}){1,2})\b/);
   if (!m) return null;
   const code = m[1];
   if (ACTIVITEIT_INDEX[code]) return code;
@@ -1993,7 +2002,9 @@ function csvActCode(header) {
   return null;
 }
 // Vat meerdere CSV-substatussen samen tot één activiteitstatus.
-const STATUS_PRIO = { issue: 5, vertraagd: 4, bezig: 3, gereed: 2 };
+// Een restpunt wint van gereed (het ⚑ moet zichtbaar blijven), problemen
+// winnen van alles.
+const STATUS_PRIO = { issue: 5, vertraagd: 4, bezig: 3, restpunt: 2.5, gereed: 2 };
 function vatStatusSamen(lijst) {
   const echt = lijst.filter((s) => s !== 'nvt');
   if (!echt.length) return lijst.length ? 'nvt' : null;
@@ -2020,6 +2031,7 @@ function importeerCsv(tekst) {
   // Statuskolommen: elke kop met een herkenbare activiteitcode (1..5 als waarde).
   const statusCols = [];
   header.forEach((h, i) => { const code = csvActCode(h); if (code) statusCols.push({ i, code }); });
+  const kolomCodes = new Set(statusCols.map((c) => c.code));
   const nieuwe = [], voortgang = {}, gezien = new Set();
   let statusGevonden = 0;
   for (let r = headerIdx + 1; r < rows.length; r++) {
@@ -2027,6 +2039,8 @@ function importeerCsv(tekst) {
     const project = (row[cProject] || '').trim();
     const wp = (cWp >= 0 ? row[cWp] : '').trim();
     if (!project || !wp) continue;
+    // Excel-tabelartefact ("Kolom1", "Kolom310", …) is geen werkpakket.
+    if (/^Kolom\d+$/i.test(project) || /^Kolom\d+$/i.test(wp)) continue;
     const engineer = (cEng >= 0 ? row[cEng] : '').trim();
     const heeftEchteDatum = MIJLPALEN.some((m) => { const d = parseDatum(row[mCols[m.key]]); return d && d.getFullYear() > 1901; });
     if (!heeftEchteDatum && !engineer) continue;
@@ -2041,12 +2055,20 @@ function importeerCsv(tekst) {
     const perCode = {};
     statusCols.forEach(({ i, code }) => {
       const raw = (row[i] || '').trim();
-      if (!/^[1-5]$/.test(raw)) return;
+      if (!/^[1-6]$/.test(raw)) return;
       (perCode[code] = perCode[code] || []).push(CSV_STATUSCODE[+raw]);
     });
     const vg = {};
     Object.entries(perCode).forEach(([code, lijst]) => { const st = vatStatusSamen(lijst); if (st) vg[code] = { status: st }; });
-    if (Object.keys(vg).length) { voortgang[id] = vg; statusGevonden++; }
+    if (Object.keys(vg).length) {
+      // Activiteiten die de engineeringsplanning niet volgt (geen kolom in de
+      // CSV) op n.v.t. zetten: anders blijven ze eeuwig "open" en kan een fase
+      // nooit gereed gemeld worden, ook al is de CSV volledig afgerond.
+      FASES.forEach((f) => f.activiteiten.forEach((a) => {
+        if (!kolomCodes.has(a.code) && !vg[a.code]) vg[a.code] = { status: 'nvt' };
+      }));
+      voortgang[id] = vg; statusGevonden++;
+    }
   }
   if (!nieuwe.length) throw new Error('Geen geldige werkpakket-rijen gevonden.');
   return { werkpakketten: nieuwe, voortgang, statusGevonden };
@@ -2171,7 +2193,11 @@ async function init() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const { werkpakketten: wps, voortgang, statusGevonden } = importeerCsv(reader.result);
+        // Excel exporteert vaak Windows-1252; val daarop terug wanneer de
+        // UTF-8-decodering ongeldige tekens (�) oplevert.
+        let tekst = new TextDecoder('utf-8').decode(reader.result);
+        if (tekst.includes('�')) tekst = new TextDecoder('windows-1252').decode(reader.result);
+        const { werkpakketten: wps, voortgang, statusGevonden } = importeerCsv(tekst);
         State.werkpakketten = wps;
         State.voortgang = voortgang || {};
         State.bewaar();
@@ -2183,7 +2209,7 @@ async function init() {
         toonTab('overzicht');
       } catch (err) { el('#importMelding').innerHTML = `<span class="fout">Import mislukt: ${htmlEsc(err.message)}</span>`; }
     };
-    reader.readAsText(file, 'utf-8'); e.target.value = '';
+    reader.readAsArrayBuffer(file); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances, wijzigingen: State.wijzigingen, vtws: State.vtws }, null, 2)], { type: 'application/json' });

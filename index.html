@@ -361,7 +361,7 @@
       <div class="grid-2">
         <div class="card">
           <div class="card-kop"><h2>Planning importeren (CSV)</h2></div>
-          <p class="sub">Importeer het HVP-engineeringsdashboard (<code>;</code>-gescheiden CSV). Projecten, APD's, werkpakketten en mijlpaaldata worden automatisch ingelezen.</p>
+          <p class="sub">Importeer het HVP-engineeringsdashboard (<code>;</code>-gescheiden CSV). Projecten, APD's, werkpakketten, mijlpaaldata én activiteitstatussen (1=gereed, 2=lopend, 3=vertraagd, 4=issue, 5=n.v.t., 6=restpunt) worden ingelezen en <strong>vervangen de huidige stand volledig</strong>. Activiteiten die de planning niet volgt, worden op n.v.t. gezet zodat ze de fase-gereedmelding niet blokkeren.</p>
           <label class="filebtn">Kies CSV-bestand<input id="csvFile" type="file" accept=".csv,text/csv" hidden></label>
           <div id="importMelding" class="melding"></div>
         </div>
