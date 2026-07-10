@@ -71,8 +71,10 @@ const State = {
   tolgateInstances: [],
   wijzigingen: [],
   vtws: [],
+  schouwen: [],
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   planningOpen: {},   // opengeklapte APD's op de planningpagina (key: project||apd)
+  wpOpen: {},         // opengeklapte werkpakketten (inline procesuitklap; key: wp.id) — gedeeld tussen Overzicht en Planning
   actiefWp: null,
   horizon: '30',
   mijnHorizon: '7',
@@ -100,6 +102,7 @@ const State = {
     this.tolgateInstances = staat.tolgateInstances || [];
     this.wijzigingen = staat.wijzigingen || [];
     this.vtws = staat.vtws || [];
+    this.schouwen = staat.schouwen || [];
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     // Verse start: ook de statussen uit de planning meeladen.
@@ -128,6 +131,7 @@ const State = {
       tolgateInstances: this.tolgateInstances,
       wijzigingen: this.wijzigingen,
       vtws: this.vtws,
+      schouwen: this.schouwen,
     });
   },
   wpVoortgang(wpId) {
@@ -480,6 +484,7 @@ function render() {
   if (typeof renderZro === 'function') renderZro();
   if (typeof renderTsb === 'function') renderTsb();
   if (typeof renderWijzigingen === 'function') renderWijzigingen();
+  if (typeof renderSchouwen === 'function') renderSchouwen();
   renderDashboard();
   renderRapportenControls();
   renderActiviteiten();
@@ -756,8 +761,11 @@ function renderWpTabel(wps) {
       : '<span class="badge live">Lopend</span>';
     const ernst = maxErnst(signalen(w));
     const risico = ernst >= 3 ? '<span class="tflag kritiek">kritiek</span>' : ernst >= 2 ? '<span class="tflag gevaar">risico</span>' : '';
-    return `<tr data-wp="${htmlEsc(w.id)}" class="rij">
-      <td><strong>${htmlEsc(w.wp)}</strong><div class="sub">${htmlEsc(w.tracStart)} → ${htmlEsc(w.tracEind)}</div></td>
+    const open = !!State.wpOpen[w.id];
+    const magBew = !window.Auth || Auth.magWpBewerken(w.id);
+    const uitklapRij = open ? `<tr class="rij-uitklap" data-wp="${htmlEsc(w.id)}"><td colspan="7">${wpUitklapHtml(w, magBew)}</td></tr>` : '';
+    return `<tr data-wp="${htmlEsc(w.id)}" class="rij${open ? ' open' : ''}">
+      <td><span class="gchev">${open ? '▾' : '▸'}</span><strong>${htmlEsc(w.wp)}</strong><div class="sub">${htmlEsc(w.tracStart)} → ${htmlEsc(w.tracEind)}</div></td>
       <td>${htmlEsc(w.engineer||'—')}</td>
       <td class="num">${(+w.lengteNieuw||0).toLocaleString('nl-NL')}</td>
       <td><span class="fase-pill" style="--c:${kleur}">${htmlEsc(faseNaam)}</span> ${statusBadge}</td>
@@ -765,7 +773,7 @@ function renderWpTabel(wps) {
       <td><div class="bar"><span style="width:${av.pct}%"></span></div>
         <div class="sub">${av.klaar}/${av.totaal} · ${av.pct}%${av.geblokkeerd?` · <span style="color:#ef4444">${av.geblokkeerd} geblok.</span>`:''}</div></td>
       <td>${risico}</td>
-    </tr>`;
+    </tr>${uitklapRij}`;
   }).join('');
   const f = State.filters;
   const contentFilter = !!(f.risico || f.engineer || f.fase || f.zoek);
@@ -774,19 +782,34 @@ function renderWpTabel(wps) {
   el('#hierInhoud').innerHTML = `
     <div class="niveau-rij"><button class="terug-knop" data-niveau="terug">${terugLabel}</button><span class="niveau-balk">${balkTekst}</span></div>
     <div class="card">
-      <div class="card-kop"><h2>Werkpakketten<span class="tel">${wps.length}</span></h2><span class="hint">Klik op een rij voor de activiteiten-checklist</span></div>
+      <div class="card-kop"><h2>Werkpakketten<span class="tel">${wps.length}</span></h2><span class="hint">Klik op een rij om de processtappen uit te klappen</span></div>
       <div class="tabel-wrap"><table class="tabel">
         <thead><tr><th>Werkpakket</th><th>Engineer</th><th class="num">Meters</th><th>Huidige fase</th><th>DO → UO</th><th>Voortgang</th><th>Risico</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="7" class="leeg">Geen werkpakketten gevonden.</td></tr>'}</tbody>
       </table></div>
     </div>`;
-  els('#hierInhoud .rij').forEach((tr) => tr.addEventListener('click', () => openDetail(tr.dataset.wp)));
+  els('#hierInhoud .rij').forEach((tr) => tr.addEventListener('click', () => {
+    State.wpOpen[tr.dataset.wp] = !State.wpOpen[tr.dataset.wp];
+    renderWpTabel(wps);
+  }));
+  bindWpUitklap('#hierInhoud', () => renderWpTabel(wps));
 }
 
 /* ------------------------------- Planning -------------------------------- */
 // Hiërarchische planning: Project ▸ APD ▸ Werkpakket, met mijlpaalmarkers (◆).
 // Een APD is pas '<fase> gereed' wanneer álle onderliggende werkpakketten die
 // fase hebben afgerond; restpunten schuiven door en blokkeren dat niet.
+
+// Kernmijlpalen die op de planning worden gemarkeerd — de Liander-tolgates plus
+// de start en afronding van de VO-fase. De rest van de mijlpalen wordt op de
+// planning weggelaten om de balk leesbaar te houden (wel zichtbaar in het detail).
+const KERN_MIJLPALEN = [
+  { key: 'analyseNaarVO',    code: 'Start VO' },
+  { key: 'startConceptDO',   code: 'VO→DO' },       // afronding VO = start DO
+  { key: 'doNaarUO',         code: 'T3·DO' },        // tolgate 3 — DO gereed
+  { key: 'eindeUO',          code: 'T4·UO' },        // tolgate 4 — UO gereed
+  { key: 'contractGereed',   code: 'T5·NAO' },       // tolgate 5 — NAO: einde contractfase = start uitvoering
+];
 
 // Fase-gereedheid van een APD over zijn werkpakketten.
 function apdFaseGereed(wps, fase) {
@@ -808,27 +831,110 @@ function apdMijlpaalDatum(wps, key) {
 }
 
 function mijlpaalMarkers(mijlpalen, pos, prefix) {
-  const items = MIJLPALEN.map((m) => {
-    const d = typeof mijlpalen[m.key] === 'string' ? parseDatum(mijlpalen[m.key]) : mijlpalen[m.key];
+  const items = KERN_MIJLPALEN.map((km) => {
+    const raw = mijlpalen[km.key];
+    const d = typeof raw === 'string' ? parseDatum(raw) : raw;
     if (!d) return null;
-    return { m, d, left: pos(d), behaald: d <= VANDAAG };
+    const meta = MIJLPALEN.find((m) => m.key === km.key);
+    return { m: meta, code: km.code, d, left: pos(d), behaald: d <= VANDAAG };
   }).filter(Boolean).sort((a, b) => a.left - b.left);
-  // Datumlabels in twee lagen (boven/onder de balk); een label vervalt als er
-  // in beide lagen geen ruimte meer is — de tooltip toont dan nog de datum.
-  const MIN_AFSTAND = 5.5;   // ± labelbreedte in % van de tijdas
+  // Codelabels in twee lagen (boven/onder de balk); een label vervalt als er
+  // in beide lagen geen ruimte meer is — de tooltip toont dan nog naam + datum.
+  const MIN_AFSTAND = 7;   // ± labelbreedte in % van de tijdas (codes zijn breder)
   const laatste = { boven: -Infinity, onder: -Infinity };
   items.forEach((it) => {
     if (it.left - laatste.boven >= MIN_AFSTAND) { it.lane = 'boven'; laatste.boven = it.left; }
     else if (it.left - laatste.onder >= MIN_AFSTAND) { it.lane = 'onder'; laatste.onder = it.left; }
   });
   return items.map((it) => {
-    const titel = `${prefix} — ◆ ${it.m.label}: ${fmtDatum(it.d)}${it.behaald ? ' (gepasseerd)' : ''}`;
+    const naam = it.m ? it.m.label : it.code;
+    const titel = `${prefix} — ◆ ${it.code} · ${naam}: ${fmtDatum(it.d)}${it.behaald ? ' (gepasseerd)' : ''}`;
     const rand = it.left < 2 ? ' rand-l' : it.left > 97 ? ' rand-r' : '';
     const lbl = it.lane
-      ? `<span class="gmp-lbl ${it.lane}${it.behaald ? ' behaald' : ''}${rand}" style="left:${it.left}%" title="${htmlEsc(titel)}">${it.d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}</span>`
+      ? `<span class="gmp-lbl kern ${it.lane}${it.behaald ? ' behaald' : ''}${rand}" style="left:${it.left}%" title="${htmlEsc(titel)}">${htmlEsc(it.code)}</span>`
       : '';
-    return `<span class="gmp${it.behaald ? ' behaald' : ''}" style="left:${it.left}%" title="${htmlEsc(titel)}"></span>${lbl}`;
+    return `<span class="gmp kern${it.behaald ? ' behaald' : ''}" style="left:${it.left}%" title="${htmlEsc(titel)}"></span>${lbl}`;
   }).join('');
+}
+
+// Alle nog niet afgehandelde activiteiten van een werkpakket, in procesvolgorde,
+// elk met de berekende periode (op basis van de doorlooptijden binnen hun fase).
+function openTakenMetTijd(w) {
+  const v = State.voortgang[w.id] || {};
+  const items = [];
+  FASES.forEach((fase) => {
+    const sch = faseSchema(w, fase);
+    fase.activiteiten.forEach((activiteit, idx) => {
+      const status = (v[activiteit.code] && v[activiteit.code].status) || 'open';
+      if (status === 'nvt' || isAfgehandeld(status)) return;
+      const tijd = sch ? sch.items[idx] : null;
+      items.push({ fase, activiteit, status, start: tijd ? tijd.start : null, eind: tijd ? tijd.eind : null, dt: tijd ? tijd.dt : State.getDt(activiteit.code) });
+    });
+  });
+  return items;
+}
+
+// Inline uitklap onder een werkpakket in de planning: de eerstvolgende taak
+// bovenaan, daaronder de rest van de openstaande taken (scrollbaar), plus wat
+// er nog moet gebeuren tot de eerstvolgende mijlpaal — inclusief tijden.
+function wpUitklapHtml(w, magBew) {
+  const hf = huidigeFase(w);
+  const stap = volgendeStap(w);
+  const openTaken = openTakenMetTijd(w);
+  const av = activiteitVoortgang(w);
+
+  const fase = hf.fase;
+  const mijlpaalDef = fase ? MIJLPALEN.find((m) => m.key === fase.eindMijlpaal) : null;
+  const mijlpaalDatum = mijlpaalDef ? parseDatum(w.mijlpalen[mijlpaalDef.key]) : null;
+  const sch = fase ? faseSchema(w, fase) : null;
+  const restInFase = fase ? openTaken.filter((t) => t.fase.id === fase.id).length : 0;
+  const band = mijlpaalDatum
+    ? `<div class="wp-mp-band${sch && sch.overschrijding ? ' krap' : ''}">
+        <span>Tot mijlpaal <b>${htmlEsc(mijlpaalDef.label)}</b> op <b>${fmtDatum(mijlpaalDatum)}</b> (nog ${dagenVerschil(VANDAAG, mijlpaalDatum)} kalenderdagen) moet${restInFase === 1 ? '' : 'en'} nog <b>${restInFase}</b> ta${restInFase === 1 ? 'ak' : 'ken'} in de ${htmlEsc(fase.naam)} worden afgerond.</span>
+        ${sch ? `<span class="wp-mp-venster">Venster ${fmtDatum(sch.start)} → ${fmtDatum(sch.eind)} · <b>${sch.beschikbaar}</b> wd beschikbaar · <b>${sch.benodigd}</b> wd nodig${sch.overschrijding ? ' · <span class="waarsch">parallel werk nodig</span>' : ''}</span>` : ''}
+      </div>`
+    : `<div class="wp-mp-band leeg">Geen mijlpaaldata beschikbaar voor de huidige fase.</div>`;
+
+  const stapHtml = stap
+    ? `<div class="wp-huidige-taak">
+        <div>
+          <div class="wp-huidige-label">Eerstvolgende taak · ${htmlEsc(stap.fase.naam)}</div>
+          <div class="wp-huidige-naam"><b>${htmlEsc(stap.activiteit.code)}</b> ${htmlEsc(stap.activiteit.naam)}</div>
+        </div>
+        ${magBew ? `<button type="button" class="vs-vink wp-vink" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(stap.activiteit.code)}">✓ Vink af als gereed</button>` : ''}
+      </div>`
+    : `<div class="wp-huidige-taak klaar">🎉 Alle processtappen van dit werkpakket zijn afgevinkt (${av.klaar}/${av.totaal}).</div>`;
+
+  const rest = stap ? openTaken.filter((t) => !(t.fase.id === stap.fase.id && t.activiteit.code === stap.activiteit.code)) : openTaken;
+  const taakRij = (t) => {
+    const stKleur = STATUSSEN[t.status].kleur;
+    const tijd = t.start && t.eind ? `${fmtDatum(t.start)} → ${fmtDatum(t.eind)} <span class="wp-taak-dt">(${t.dt} wd)</span>` : '';
+    return `<div class="wp-taak-rij" style="--c:${t.fase.kleur}">
+      ${magBew ? `<input type="checkbox" class="wp-taak-check" data-wp="${htmlEsc(w.id)}" data-code="${htmlEsc(t.activiteit.code)}" title="Vink af als gereed">` : ''}
+      <div class="wp-taak-inhoud">
+        <span class="wp-taak-fase">${htmlEsc(t.fase.naam)}</span>
+        <span class="wp-taak-naam"><b>${htmlEsc(t.activiteit.code)}</b> ${htmlEsc(t.activiteit.naam)}</span>
+        ${tijd ? `<span class="wp-taak-tijd">${tijd}</span>` : ''}
+      </div>
+      <span class="statuschip" style="background:${stKleur}">${STATUSSEN[t.status].label}</span>
+    </div>`;
+  };
+  const scrollHtml = rest.length ? `<div class="wp-taken-scroll">${rest.map(taakRij).join('')}</div>` : '';
+
+  return `<div class="wp-uitklap">${band}${stapHtml}${scrollHtml}</div>`;
+}
+
+// Bindt de "vink af"-knop en checkboxes binnen een inline wp-uitklap. Gedeeld
+// door alle plekken die wpUitklapHtml() renderen (Overzicht, Planning).
+function bindWpUitklap(containerSel, herrender) {
+  const wpVinkAf = (wpId, code) => {
+    if (window.Auth && !Auth.magWpBewerken(wpId)) return;
+    State.wpVoortgang(wpId)[code] = Object.assign(State.wpVoortgang(wpId)[code] || {}, { status: 'gereed' });
+    State.bewaar(); herrender(); renderTaken(); renderDashboard();
+    if (State.actiefWp === wpId) renderDetail(wpId);
+  };
+  els(`${containerSel} .wp-vink`).forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); wpVinkAf(b.dataset.wp, b.dataset.code); }));
+  els(`${containerSel} .wp-taak-check`).forEach((c) => c.addEventListener('change', (e) => { e.stopPropagation(); wpVinkAf(c.dataset.wp, c.dataset.code); }));
 }
 
 function renderPlanning() {
@@ -844,10 +950,22 @@ function renderPlanning() {
   const span = (max - min) || 1;
   const pos = (d) => (((typeof d === 'string' ? parseDatum(d) : d) - min) / span) * 100;
   const asTicks = [];
-  let cur = new Date(min.getFullYear(), min.getMonth(), 1);
+  // Adaptieve stap: hooguit ± 12 labels op de as, zodat de datumbalk leesbaar blijft.
+  // Bij een lange spanne stappen we per kwartaal, half jaar of jaar en lijnen we
+  // netjes uit op de grens (jan/apr/jul/okt resp. januari).
+  const totaalMnd = (max.getFullYear() - min.getFullYear()) * 12 + (max.getMonth() - min.getMonth()) + 1;
+  const stap = [1, 2, 3, 6, 12].find((s) => totaalMnd / s <= 12) || 12;
+  let startMaand = min.getMonth();
+  if (stap === 3 || stap === 6 || stap === 12) startMaand = Math.floor(startMaand / stap) * stap;
+  let cur = new Date(min.getFullYear(), startMaand, 1);
   while (cur <= max) {
-    asTicks.push({ left: ((cur - min) / span) * 100, label: cur.toLocaleDateString('nl-NL', { month: 'short', year: '2-digit' }) });
-    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    const left = ((cur - min) / span) * 100;
+    if (left >= 0 && left <= 100) {
+      const label = stap >= 12 ? String(cur.getFullYear())
+        : cur.toLocaleDateString('nl-NL', { month: 'short', year: '2-digit' });
+      asTicks.push({ left, label });
+    }
+    cur = new Date(cur.getFullYear(), cur.getMonth() + stap, 1);
   }
   const vandaagLeft = (VANDAAG >= min && VANDAAG <= max) ? ((VANDAAG - min) / span) * 100 : null;
   el('#ganttAs').innerHTML = asTicks.map((t) => `<span class="tick" style="left:${t.left}%">${t.label}</span>`).join('') +
@@ -870,9 +988,14 @@ function renderPlanning() {
   const wpRij = (w) => {
     const titel = `${w.project} · ${apdVan(w)} · ${w.wp}`;
     const rest = FASES.reduce((n, f) => n + faseVoortgang(w, f).restpunten, 0);
-    return `<div class="grow wp" data-wp="${htmlEsc(w.id)}">
-      <div class="glabel" title="${htmlEsc(titel)}">${htmlEsc(w.wp)}${rest ? `<span class="grest" title="${rest} restpunt(en) — schuiven door naar een volgende fase">⚑${rest}</span>` : ''}</div>
-      <div class="gtrack">${faseSegs([w], titel)}${mijlpaalMarkers(w.mijlpalen, pos, titel)}${vandaagLijn}</div>
+    const open = !!State.wpOpen[w.id];
+    const magBew = !window.Auth || Auth.magWpBewerken(w.id);
+    return `<div class="gwp${open ? ' open' : ''}" data-wp="${htmlEsc(w.id)}">
+      <div class="grow wp" role="button" tabindex="0" title="${htmlEsc(titel)} — klik om de processtappen ${open ? 'in' : 'uit'} te klappen">
+        <div class="glabel"><span class="gchev">${open ? '▾' : '▸'}</span>${htmlEsc(w.wp)}${rest ? `<span class="grest" title="${rest} restpunt(en) — schuiven door naar een volgende fase">⚑${rest}</span>` : ''}</div>
+        <div class="gtrack">${faseSegs([w], titel)}${mijlpaalMarkers(w.mijlpalen, pos, titel)}${vandaagLijn}</div>
+      </div>
+      ${open ? wpUitklapHtml(w, magBew) : ''}
     </div>`;
   };
 
@@ -922,10 +1045,19 @@ function renderPlanning() {
     r.addEventListener('click', toggle);
     r.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   });
-  els('#ganttBody .grow.wp').forEach((r) => r.addEventListener('click', (e) => { e.stopPropagation(); openDetail(r.dataset.wp); }));
+  els('#ganttBody .grow.wp').forEach((r) => {
+    const toggle = () => {
+      const wpId = r.closest('.gwp').dataset.wp;
+      State.wpOpen[wpId] = !State.wpOpen[wpId];
+      renderPlanning();
+    };
+    r.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+    r.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggle(); } });
+  });
+  bindWpUitklap('#ganttBody', renderPlanning);
 
   el('#ganttLegenda').innerHTML = FASES.map((f) => `<span class="leg"><i style="background:${f.kleur}"></i>${htmlEsc(f.naam)}</span>`).join('') +
-    '<span class="leg"><i class="leg-mp"></i>mijlpaal (gevuld = gepasseerd)</span>' +
+    '<span class="leg"><i class="leg-mp"></i>kernmijlpaal · Start VO · VO→DO · T3·DO · T4·UO · T5·NAO (gevuld = gepasseerd)</span>' +
     `<span class="leg"><i style="background:${STATUSSEN.restpunt.kleur}"></i>⚑ restpunt — schuift door naar een volgende fase</span>`;
 }
 
@@ -1683,11 +1815,13 @@ function bouwRapportData(scope, van, tot, label) {
     registers: registerRapportData(scope),
     tsb: typeof tsbRapportData === 'function' ? tsbRapportData(scope) : null,
     wijzigingen: typeof wijzigingenRapportData === 'function' ? wijzigingenRapportData(scope) : null,
+    schouwen: typeof schouwRapportData === 'function' ? schouwRapportData(scope) : null,
     perProject,
   };
 }
 
 function rapportPrompt(data) {
+  const rapportFormat = (State.instellingen.rapportFormat || '').trim();
   const system = `Je bent een ervaren projectbeheerser/PMO-adviseur bij netbeheerder-aannemer HVP. Je schrijft heldere, zakelijke Nederlandstalige management­rapportages over de bouwteamfase "Nulelie" (engineering van ondergrondse kabelverbindingen). De hiërarchie is Project ▸ APD ▸ Werkpakket.
 
 Schrijf in Markdown. Gebruik UITSLUITEND de aangeleverde cijfers en feiten — verzin geen getallen, namen of mijlpalen. Waar gegevens ontbreken, benoem dat kort. Wees concreet en stuurgericht: benoem waar het goed gaat, waar het risico loopt en wat de komende periode concreet moet gebeuren.
@@ -1697,9 +1831,11 @@ STUUR PROACTIEF, NIET ACHTERAF. De data bevat twee gescheiden risicocategorieën
 - "reedsTeLaat" = acties die al over hun datum zijn of niet meer binnen de doorlooptijd passen. Dit is herstelwerk, geen preventie.
 Open de samenvatting met de scherpste "dreigtTeLaat"-punten (waar moet deze week beslist of gestart worden), en behandel "reedsTeLaat" daarna als herstel.
 
-OPMAAK. Het rapport wordt als opgemaakt HTML-document getoond; boven jouw tekst staat al een rapportkop met titel, scope, periode en KPI-tegels. Begin daarom DIRECT met "## Samenvatting" — geen eigen #-titel, geen herhaling van de kerncijfers als losse opsomming. Gebruik nette, compacte Markdown-tabellen waar dat het rapport sterker maakt (kerncijfers, mijlpalen, acties): maximaal ± 8 rijen per tabel, selecteer de belangrijkste en benoem hoeveel er nog meer zijn. Interpreteer en prioriteer: benoem bij de vroegsignalering de 3-6 acties die nu om een besluit of start vragen (met uiterste startdatum) en leg verbanden (opeenstapeling bij één werkpakket, engineer of mijlpaal).
+OPMAAK. Het rapport wordt als opgemaakt HTML-document getoond; boven jouw tekst staat al een rapportkop met titel, scope, periode en KPI-tegels. Begin daarom DIRECT met de eerste kop van de structuur hieronder${rapportFormat ? '' : ' ("## Samenvatting")'} — geen eigen #-titel, geen herhaling van de kerncijfers als losse opsomming. Gebruik nette, compacte Markdown-tabellen waar dat het rapport sterker maakt (kerncijfers, mijlpalen, acties): maximaal ± 8 rijen per tabel, selecteer de belangrijkste en benoem hoeveel er nog meer zijn. Interpreteer en prioriteer: benoem bij de vroegsignalering de 3-6 acties die nu om een besluit of start vragen (met uiterste startdatum) en leg verbanden (opeenstapeling bij één werkpakket, engineer of mijlpaal).
 
-Verplichte structuur:
+${rapportFormat
+    ? `FORMAT. In het beheerscherm is het volgende rapportageformat vastgelegd. Volg dit format exact — zelfde koppen, zelfde volgorde, zelfde onderdelen. Vul elk onderdeel met de relevante cijfers/feiten uit de data hieronder; laat een onderdeel weg als de bijbehorende data ontbreekt:\n\n${rapportFormat}`
+    : `Verplichte structuur:
 ## Samenvatting   (3-5 kernzinnen; open met het scherpste dreigt-te-laat-signaal)
 ## Terugblik afgelopen periode   (mijlpalen die gepland stonden en hun status; voortgangsontwikkeling indien beschikbaar)
 ## Voortgang & KPI's   (kerncijfers; gebruik een korte Markdown-tabel)
@@ -1708,7 +1844,7 @@ Verplichte structuur:
 ## Vroegsignalering — dreigt te laat   (acties die nu om een besluit/start vragen vóór hun uiterste startdatum; als tabel met uiterste startdatum en fase-einde, geprioriteerd)
 ## Reeds te laat & blokkades   (over-datum acties, geblokkeerd/issue; betrek vergunningen/ZRO die over de besluitdatum zijn)
 ## Vooruitblik komende periode   (naderende mijlpalen, openstaande vergunningen/ZRO en wat er concreet gedaan moet worden)
-## Aanbevelingen   (3-6 puntsgewijze, actiegerichte aanbevelingen)
+## Aanbevelingen   (3-6 puntsgewijze, actiegerichte aanbevelingen)`}
 
 Houd het bondig maar volledig; vermijd holle frasen en herhaling.`;
 
@@ -1965,6 +2101,7 @@ function renderInstellingen() {
   els('#instSnapLijst .verwijder').forEach((b) => b.addEventListener('click', () => {
     State.snapshots = State.snapshots.filter((s) => s.datum !== b.dataset.d); State.bewaar(); renderInstellingen(); renderDashboard();
   }));
+  if (typeof renderDocumentFormats === 'function') renderDocumentFormats();
 }
 
 /* ------------------------------ CSV-import ------------------------------- */
@@ -2140,6 +2277,8 @@ async function init() {
   Auth.koppelGebruiker();        // registreer gebruiker + bepaal rol
   registersInit();
   if (typeof wijzigingenInit === 'function') wijzigingenInit();
+  if (typeof documentFormatsInit === 'function') documentFormatsInit();
+  if (typeof schouwInit === 'function') schouwInit();
 
   els('.tab').forEach((t) => t.addEventListener('click', () => toonTab(t.dataset.tab)));
   el('#detailClose').addEventListener('click', sluitDetail);
@@ -2168,6 +2307,7 @@ async function init() {
     renderVergunningen();
     if (typeof renderZro === 'function') renderZro();
     if (typeof renderWijzigingen === 'function') renderWijzigingen();
+    if (typeof renderSchouwen === 'function') renderSchouwen();
   });
   el('#filterReset').addEventListener('click', () => { State.filters = { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' }; State.takenFilter = 'alle'; el('#filterZoek').value = ''; render(); });
 
@@ -2212,7 +2352,7 @@ async function init() {
     reader.readAsArrayBuffer(file); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances, wijzigingen: State.wijzigingen, vtws: State.vtws }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances, wijzigingen: State.wijzigingen, vtws: State.vtws, schouwen: State.schouwen }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
@@ -2233,6 +2373,7 @@ async function init() {
         if (data.tolgateInstances) State.tolgateInstances = data.tolgateInstances;
         if (data.wijzigingen) State.wijzigingen = data.wijzigingen;
         if (data.vtws) State.vtws = data.vtws;
+        if (data.schouwen) State.schouwen = data.schouwen;
         State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
         toast('Werkbestand hersteld', 'ok'); toonTab('overzicht');
@@ -2260,6 +2401,8 @@ async function init() {
     State.tolgates = JSON.parse(JSON.stringify(window.STANDAARD_TOLGATES || []));
     State.tolgateInstances = [];
     State.wijzigingen = []; State.vtws = [];
+    State.schouwen = [];
+    if (window.SchouwFotos) SchouwFotos.wisAlles();
     State.bewaar(); render(); toonTab('overzicht'); toast('Alles gewist', 'ok');
   });
 

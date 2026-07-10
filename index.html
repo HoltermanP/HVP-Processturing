@@ -25,6 +25,7 @@
         <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
         <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
         <button class="tab" data-tab="zro"><span class="ico">⚖</span>ZRO</button>
+        <button class="tab" data-tab="schouwen"><span class="ico">⌖</span>Schouwen</button>
         <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
         <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
         <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
@@ -150,6 +151,33 @@
       </div>
       <div class="card"><div id="zroKpis" class="taken-stats"></div></div>
       <div id="zroInhoud"></div>
+    </section>
+
+    <!-- ================= SCHOUWEN ================= -->
+    <section id="view-schouwen" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Schouwen</h2>
+          <p>Bekijk en beoordeel de situatie ter plaatse — in elke fase. Een schouw hoort bij een APD en bestaat uit meerdere locaties (delen) langs het tracé, elk met foto's, gesproken en geschreven toelichting en de GPS-locatie. Elke schouw is om te zetten in een rapport (HTML, PDF of Word) als input voor ontwerp en realisatie.</p>
+        </div>
+        <button class="primair" id="schToevoegen"><span class="ico">⌖</span> Nieuwe schouw</button>
+      </div>
+      <div class="card"><div id="schKpis" class="taken-stats"></div></div>
+      <div id="schInhoud"></div>
+      <div id="schEditor" style="display:none"></div>
+      <div class="card" id="schRapportKaart" style="display:none">
+        <div class="card-kop">
+          <h2 id="schRapportTitel">Schouwrapport</h2>
+          <div class="knoppenrij">
+            <button id="schRapAi" class="ghost">✦ Bevindingen door AI</button>
+            <button id="schRapPdf" class="ghost">Download PDF</button>
+            <button id="schRapWord" class="ghost">Download Word</button>
+            <button id="schRapHtml" class="ghost">Download HTML</button>
+          </div>
+        </div>
+        <div id="schRapStatus" class="ai-status"></div>
+        <div id="schRapDoc" class="rapport-doc"></div>
+      </div>
     </section>
 
     <!-- ================= TSB (begroting, uren & kosten) ================= -->
@@ -395,9 +423,22 @@
             </select>
           </div>
           <div class="inst-veld">
+            <label>Rapportageformat</label>
+            <span class="uitleg">Het format waarin maand-/kwartaalrapportages worden geschreven: koppen, volgorde en vaste onderdelen. Leeg laten = de standaardstructuur van de app. Upload een compleet ingevuld voorbeeldrapport (PDF, Word of Excel) om het format automatisch over te nemen, of typ/plak het zelf.</span>
+            <textarea id="instRapportFormat" rows="8" placeholder="bijv.&#10;## Samenvatting&#10;## Terugblik afgelopen periode&#10;## Voortgang &amp; KPI's&#10;## Vooruitblik komende periode&#10;## Aanbevelingen"></textarea>
+            <div class="knoppenrij" style="margin-top:2px">
+              <label class="filebtn">Upload voorbeelddocument<input id="instRapportFormatUpload" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt" hidden></label>
+              <span id="instRapportFormatUploadStatus" class="hint"></span>
+            </div>
+          </div>
+          <div class="inst-veld">
             <label>VTW-format</label>
-            <span class="uitleg">Het format waarin VTW's (Verzoek Tot Wijziging) worden opgesteld: koppen, volgorde en vaste onderdelen. Leeg laten = de AI hanteert zelf een professioneel standaardformat.</span>
+            <span class="uitleg">Het format waarin VTW's (Verzoek Tot Wijziging) worden opgesteld: koppen, volgorde en vaste onderdelen. Leeg laten = de AI hanteert zelf een professioneel standaardformat. Upload een compleet ingevuld voorbeeld-VTW (PDF, Word of Excel) om het format automatisch over te nemen, of typ/plak het zelf.</span>
             <textarea id="instVtwFormat" rows="8" placeholder="bijv.&#10;# VTW [nummer] — [titel]&#10;## Aanleiding&#10;## Omschrijving van de wijziging&#10;## Consequenties kosten&#10;## Consequenties planning&#10;## Besluit opdrachtgever"></textarea>
+            <div class="knoppenrij" style="margin-top:2px">
+              <label class="filebtn">Upload voorbeelddocument<input id="instVtwFormatUpload" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt" hidden></label>
+              <span id="instVtwFormatUploadStatus" class="hint"></span>
+            </div>
           </div>
           <div class="inst-veld">
             <label>Database &amp; API-sleutels</label>
@@ -412,6 +453,12 @@
             <ul id="instSnapLijst" class="snap-lijst"></ul>
           </div>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-kop"><h2>Overige documentformats</h2><span class="hint">Voor toekomstige outputs naast rapportages en VTW's. Upload een compleet ingevuld voorbeelddocument (PDF, Word of Excel); de tekst wordt bewaard en is later te bekijken of te kopiëren.</span></div>
+        <label class="filebtn">Upload document<input id="instOverigFormatUpload" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt" hidden></label>
+        <ul id="overigFormatLijst" class="snap-lijst"></ul>
       </div>
 
       <div class="card">
@@ -465,6 +512,8 @@
   <script src="js/tsb.js"></script>
   <script src="js/tolgates.js"></script>
   <script src="js/wijzigingen.js"></script>
+  <script src="js/schouw.js"></script>
+  <script src="js/documentformats.js"></script>
   <script src="js/rechten.js"></script>
   <script src="js/app.js"></script>
 </body>

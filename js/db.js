@@ -51,6 +51,7 @@ const DB = (() => {
       tolgateInstances: cache.tolgateInstances || [],
       wijzigingen: cache.wijzigingen || [],
       vtws: cache.vtws || [],
+      schouwen: cache.schouwen || [],
     };
     try {
       setStatus('bezig');
@@ -74,6 +75,7 @@ const DB = (() => {
           if (Array.isArray(d.tolgateInstances)) staat.tolgateInstances = d.tolgateInstances;
           if (Array.isArray(d.wijzigingen)) staat.wijzigingen = d.wijzigingen;
           if (Array.isArray(d.vtws)) staat.vtws = d.vtws;
+          if (Array.isArray(d.schouwen)) staat.schouwen = d.schouwen;
           laatsteSync = d._bijgewerkt || new Date().toISOString();
           schrijfCache(staat);
           setStatus('online');
@@ -116,6 +118,7 @@ const DB = (() => {
           tolgateInstances: staat.tolgateInstances,
           wijzigingen: staat.wijzigingen,
           vtws: staat.vtws,
+          schouwen: staat.schouwen,
         }),
       });
       if (r.ok) {

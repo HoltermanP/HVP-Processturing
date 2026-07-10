@@ -8,6 +8,16 @@ CREATE TABLE IF NOT EXISTS hvp_kv (
   bijgewerkt timestamptz NOT NULL DEFAULT now()
 );
 
+-- Schouwfoto's staan apart (te groot voor de applicatiestaat): één rij per
+-- foto, beheerd door api/schouwfoto.js. 'data' is een JPEG als data-URL; de
+-- schouw zelf (metadata, delen, locaties) staat onder de sleutel 'schouwen'
+-- in hvp_kv en verwijst naar deze foto-id's.
+CREATE TABLE IF NOT EXISTS hvp_fotos (
+  id         text PRIMARY KEY,
+  data       text NOT NULL,
+  bijgewerkt timestamptz NOT NULL DEFAULT now()
+);
+
 -- De data wordt als JSON-documenten opgeslagen die de hiërarchie
 -- Project ▸ APD ▸ Werkpakket weerspiegelen (elk werkpakket draagt een
 -- 'project'- en 'apd'-veld). Voorbeeld van een werkpakket binnen 'werkpakketten':

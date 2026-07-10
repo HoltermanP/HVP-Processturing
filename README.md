@@ -32,7 +32,8 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
 - **Rapporten** — genereer een **maand-** of **kwartaalrapportage** met een
   terugblik op de afgelopen periode én een vooruitblik op wat er nog moet
   gebeuren. De cijfers worden in de app berekend; de **Anthropic-API** schrijft
-  het verhaal (streaming, in het Nederlands).
+  het verhaal (streaming, in het Nederlands), desgewenst volgens het
+  rapportageformat uit **Beheer → Instellingen**.
 - **TSB** — kostenbegrotingen, gewerkte uren en gemaakte kosten per project
   (overgenomen uit de losse HVP-TSB-app):
   - *Formats*: herbruikbare basis met rollen + uurtarieven en de structuur
@@ -54,10 +55,25 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
   financiële impact, met statusflow *nieuw → ingediend → goedgekeurd/afgekeurd*
   (afkeuren vereist een toelichting). Geselecteerde wijzigingen bundel je in een
   **VTW** (Verzoek Tot Wijziging): de AI stelt de complete notitie op volgens
-  het VTW-format uit **Beheer → Instellingen** (of, zonder format, een eigen
+  het VTW-format uit **Beheer → Instellingen** (getypt/geplakt, of overgenomen
+  uit een geüpload voorbeelddocument — of, zonder format, een eigen
   professioneel standaardformat) en gebruikt daarbij de wijzigingen plus de
   beschikbare projectinformatie. VTW's worden bewaard in een register en zijn
   te downloaden als HTML.
+- **Schouwen** — bekijk en beoordeel de situatie ter plaatse, in **elke fase**.
+  Een schouw hoort bij een **APD** binnen een project en bestaat uit meerdere
+  **delen**: je rijdt naar een locatie, legt daar foto's vast en rijdt door naar
+  het volgende punt — zo wordt een heel tracé geschouwd. Uitvoering is gemaakt
+  voor de **smartphone**: foto's via de camera (automatisch verkleind), een
+  **gesproken toelichting** (spraakherkenning, nl-NL), geschreven notities en
+  per deel de **GPS-locatie** (met kaartlink). Elke schouw wordt bewaard en is
+  om te zetten in een **mooi opgemaakt rapport** — in de app als HTML, te
+  downloaden als **PDF, Word of HTML** (inclusief foto's). De AI kan optioneel
+  **bevindingen & aanbevelingen voor ontwerp en realisatie** aan het rapport
+  toevoegen, en de schouwen gaan mee in de maand-/kwartaalrapportages.
+  Foto's synchroniseren per stuk naar Neon (`api/schouwfoto.js`, tabel
+  `hvp_fotos`) met IndexedDB als offline cache — veldwerk zonder bereik
+  synchroniseert zodra er weer verbinding is.
 - **Mijn projecten** — alleen de werkpakketten waaraan jij bent toegewezen, met
   je eigen taken voor de komende periode.
 - **Activiteiten / Doorlooptijden** — referentiebibliotheek met per stap een
@@ -67,8 +83,13 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
   stapteksten in de bibliotheek aanpassen; de aanpassingen gelden voor iedereen.
 - **Toewijzen** (ontwerpleider/manager) — gebruikers per werkpakket koppelen.
 - **Accounts** (ontwerpleider/manager) — rollen toekennen aan gebruikers.
-- **Beheer** — CSV-import, JSON-export/herstel, instellingen (peildatum, AI-model)
-  en momentopnames voor trends.
+- **Beheer** — CSV-import, JSON-export/herstel, instellingen (peildatum,
+  AI-model), momentopnames voor trends, en **documentformats**: het
+  rapportage- en VTW-format kun je typen/plakken óf overnemen door een
+  compleet ingevuld voorbeelddocument te **uploaden (PDF, Word .docx of
+  Excel)** — de tekst wordt er automatisch uit gehaald. Overige
+  documentformats (voor toekomstige outputs) zijn los te uploaden en te
+  bewaren.
 
 ## Login & rechten
 
@@ -100,10 +121,15 @@ verschijnen in **Accounts** zodra ze voor het eerst inloggen; standaardrol
 
 ## Architectuur
 
-- **Frontend**: pure HTML/CSS/JS (geen build-stap).
+- **Frontend**: pure HTML/CSS/JS (geen build-stap). Voor het uitlezen van
+  geüploade documentformats (PDF/Word/Excel) worden `pdf.js`, `mammoth.js` en
+  `SheetJS` **client-side vanaf een CDN** geladen (alleen bij gebruik van die
+  upload) — er wordt niets naar een server gestuurd om te parsen.
 - **Hosting**: Vercel. De serverless functies in `api/` houden de secrets
   server-side via **environment variables**.
   - `api/state.js` — leest/schrijft de volledige staat in **Neon** (Postgres).
+  - `api/schouwfoto.js` — bewaart schouwfoto's per stuk in Neon (tabel
+    `hvp_fotos`); de browser cachet ze in IndexedDB.
   - `api/rapport.js` — genereert rapportages via de **Anthropic-API** (streaming).
   - `api/config.js` — geeft de publieke **Clerk Publishable Key** aan de browser.
   - `api/status.js` — meldt of de env-variabelen zijn ingesteld.

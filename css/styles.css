@@ -194,6 +194,12 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .tabel .num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .rij{cursor:pointer;transition:.12s}
 .rij:hover{background:var(--accent-soft)}
+.rij.open{background:var(--accent-soft)}
+.rij .gchev{margin-right:6px}
+tr.rij-uitklap{cursor:default}
+tr.rij-uitklap:hover{background:none}
+tr.rij-uitklap td{padding:0 14px 16px}
+tr.rij-uitklap .wp-uitklap{margin:0}
 .leeg{text-align:center;color:var(--sub);padding:34px}
 .fase-pill{display:inline-flex;align-items:center;padding:4px 11px;border-radius:20px;font-size:12px;font-weight:650;color:#fff;background:var(--c)}
 .badge{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
@@ -238,6 +244,28 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .grow.wp{height:48px}
 .grow.wp .glabel{width:174px;flex-basis:174px;font-weight:500}
 .grest{font-size:10px;font-weight:700;color:#c2410c;background:#ffedd5;border-radius:7px;padding:1px 6px;margin-left:6px}
+
+/* --- Inline uitklap van een werkpakket: eerstvolgende taak + openstaande taken --- */
+.gwp{border-radius:8px}
+.gwp.open{background:rgba(148,163,184,.06)}
+.wp-uitklap{margin:2px 0 8px 14px;padding:12px 14px;background:var(--panel-2);border:1px solid var(--line);border-radius:11px;display:flex;flex-direction:column;gap:10px}
+.wp-mp-band{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-2);background:#fff;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:9px;padding:9px 12px}
+.wp-mp-band.krap{border-left-color:var(--amber)}
+.wp-mp-band.leeg{color:var(--sub);border-left-color:var(--line)}
+.wp-mp-venster{font-size:11px;color:var(--sub)}
+.wp-mp-venster .waarsch{color:#b45309;font-weight:700}
+.wp-huidige-taak{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--groen);border-radius:11px;padding:11px 14px}
+.wp-huidige-taak.klaar{border-left-color:var(--groen);background:#f0fdf4;font-weight:600;color:#047857}
+.wp-huidige-label{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--groen);margin-bottom:2px}
+.wp-huidige-naam{font-size:13.5px;color:var(--ink)}
+.wp-taken-scroll{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
+.wp-taak-rij{display:flex;align-items:center;gap:10px;padding:8px 10px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--c);border-radius:9px}
+.wp-taak-check{width:17px;height:17px;flex:0 0 auto;accent-color:var(--groen);cursor:pointer;margin:0}
+.wp-taak-inhoud{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.wp-taak-fase{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.3px}
+.wp-taak-naam{font-size:12.5px;color:var(--ink)}
+.wp-taak-tijd{font-size:11px;color:var(--sub)}
+.wp-taak-dt{color:var(--faint)}
 .gmp{position:absolute;top:50%;width:9px;height:9px;background:#fff;border:2px solid #334155;transform:translate(-50%,-50%) rotate(45deg);border-radius:1.5px;z-index:2}
 .gmp.behaald{background:#334155}
 .gmp-lbl{position:absolute;font-size:9px;font-weight:600;color:var(--sub);white-space:nowrap;transform:translateX(-50%);z-index:2;cursor:default}
@@ -246,6 +274,11 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .gmp-lbl.behaald{color:#334155}
 .gmp-lbl.rand-l{transform:none}
 .gmp-lbl.rand-r{transform:translateX(-100%)}
+/* Kernmijlpalen (tolgates + VO-start/afronding): codelabel als leesbare chip. */
+.gmp.kern{border-color:#1e3a8a}
+.gmp.kern.behaald{background:#1e3a8a}
+.gmp-lbl.kern{font-size:9.5px;font-weight:700;color:var(--accent-dark);background:var(--panel);padding:1px 4px;border-radius:4px;box-shadow:0 0 0 1px var(--line)}
+.gmp-lbl.kern.behaald{color:#1e3a8a}
 .leg-mp{width:8px !important;height:8px !important;background:#fff;border:2px solid #334155;transform:rotate(45deg);border-radius:1.5px}
 
 /* Restpunt-status */
@@ -575,13 +608,15 @@ main{padding:24px 26px 60px;max-width:1360px;margin:0 auto}
 .inst-veld{display:flex;flex-direction:column;gap:6px}
 .inst-veld label{font-size:13px;font-weight:650}
 .inst-veld .uitleg{font-size:12px;color:var(--sub)}
-.inst-veld input,.inst-veld select{padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px}
-.inst-veld input:focus,.inst-veld select:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+.inst-veld input,.inst-veld select,.inst-veld textarea{padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;width:100%;box-sizing:border-box}
+.inst-veld input:focus,.inst-veld select:focus,.inst-veld textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+.inst-veld textarea{resize:vertical}
 .sleutel-rij{display:flex;gap:8px}
 .sleutel-rij input{flex:1}
 .snap-lijst{list-style:none;margin:10px 0 0;padding:0;font-size:13px}
 .snap-lijst li{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line-2)}
 .snap-lijst .verwijder{background:none;border:0;color:var(--rood);cursor:pointer;font-size:13px}
+.snap-lijst .bekijk{background:none;border:0;color:var(--accent);cursor:pointer;font-size:13px}
 
 /* ============================ Verbindingsstatus ============================ */
 .db-status{
@@ -840,3 +875,58 @@ select.tsb-inp{text-align:left;width:auto}
 .tg-afgeleid{font-size:10px;font-weight:700;color:#b45309;background:var(--amber-soft);border-radius:20px;padding:1px 8px;align-self:flex-start}
 .tg-criteria{margin:0;padding-left:20px;font-size:13px;color:var(--ink-2)}
 .tg-criteria li{margin:3px 0}
+
+/* ============================ Schouwen ============================ */
+/* Uitvoering gebeurt op een smartphone: grote tik-doelen, één kolom. */
+.sch-editor{padding:18px 20px}
+.sch-editor-kop{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.sch-kop-info h2{display:flex;align-items:center;gap:10px;font-size:18px;flex-wrap:wrap}
+.sch-kop-info .sub{margin:3px 0 0;color:var(--sub);font-size:12.5px}
+.sch-meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 14px;margin-top:14px}
+.sch-editor-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+
+.sch-deel{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel-2);padding:14px 16px;margin:14px 0}
+.sch-deel-kop{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.sch-deel-nr{background:var(--accent);color:#fff;font-weight:750;min-width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:13px;flex:none}
+.sch-deel-titel{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-weight:600;font-family:inherit;color:var(--ink);background:#fff}
+.sch-loc{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);margin:4px 0 10px}
+.sch-loc-info{display:inline-flex;align-items:center;gap:5px}
+
+.sch-fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:4px 0 14px}
+.sch-thumb{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;cursor:pointer;transition:.14s}
+.sch-thumb:hover{border-color:var(--accent);box-shadow:var(--shadow)}
+.sch-thumb img{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:var(--line-2)}
+.sch-thumb figcaption{font-size:10px;color:var(--sub);padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:18px}
+.sch-thumb.leeg img{opacity:.25}
+.sch-foto-add{border:2px dashed var(--accent-2);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--accent);font-size:22px;aspect-ratio:1;background:#f7faff;transition:.14s;min-height:96px}
+.sch-foto-add span{font-size:11px;font-weight:650}
+.sch-foto-add:hover{background:var(--accent-soft)}
+.sch-foto-groot img{width:100%;max-height:min(58vh,560px);object-fit:contain;border-radius:12px;background:var(--line-2);display:block}
+.sch-dictaat-label{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+.sch-mic{border-color:var(--accent)}
+.sch-mic.opname{background:var(--rood);border-color:var(--rood);color:#fff;animation:schPuls 1.4s ease-in-out infinite}
+@keyframes schPuls{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}50%{box-shadow:0 0 0 7px rgba(239,68,68,0)}}
+
+.sch-groteknop{width:100%;padding:16px;border:2px dashed var(--accent-2);border-radius:var(--radius);background:#f7faff;color:var(--accent-dark);font-size:15px;font-weight:650;cursor:pointer;transition:.14s;font-family:inherit}
+.sch-groteknop:hover{background:var(--accent-soft)}
+
+/* Schouwrapport in de app (rapport-doc) */
+.sch-rap-deel{page-break-inside:avoid;border-top:1px solid var(--line);margin-top:6px}
+.sch-rap-meta{color:var(--sub);font-size:12.5px;margin:-4px 0 10px}
+.sch-rap-fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin:6px 0 18px}
+.sch-rap-foto{margin:0;page-break-inside:avoid}
+.sch-rap-foto img{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+.sch-rap-foto figcaption{font-size:11.5px;color:var(--sub);margin-top:5px;line-height:1.45}
+.sch-rap-fotoleeg{background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:10px;padding:26px 10px;text-align:center;color:var(--faint);font-size:12px}
+.sch-rap-leegtekst{color:var(--faint);font-style:italic}
+
+/* Smartphone: velden en knoppen op volle breedte, compactere kaarten */
+@media(max-width:640px){
+  .sch-editor{padding:14px}
+  .sch-meta-grid{grid-template-columns:1fr}
+  .sch-editor-kop .knoppenrij{width:100%}
+  .sch-editor-kop .knoppenrij button{flex:1}
+  .sch-fotos{grid-template-columns:repeat(3,1fr)}
+  .sch-rap-fotos{grid-template-columns:1fr}
+}
