@@ -131,6 +131,29 @@ const State = {
       const wpIds = new Set(this.werkpakketten.map((w) => w.id));
       this.vergunningen = this.vergunningen.concat(window.SEED_VERGUNNINGEN.filter((s) => wpIds.has(s.wpId)).map((s) => ({ ...s })));
     }
+    // Testgebruikers zolang er nog niemand heeft ingelogd, en afgeleide
+    // toewijzingen: engineers hun eigen werkpakketten, omgevingsmanagers hun
+    // projecten, en de devmodus-gebruiker een demo-set — zodat Mijn projecten
+    // en Mijn taken direct iets laten zien.
+    if (!Object.keys(this.gebruikers).length && window.SEED_GEBRUIKERS) {
+      window.SEED_GEBRUIKERS.forEach((g) => { this.gebruikers[g.id] = { ...g }; });
+    }
+    if (!Object.keys(this.toewijzingen).length && window.SEED_GEBRUIKERS) {
+      const wijsToe = (wpId, uid) => {
+        const lijst = this.toewijzingen[wpId] || (this.toewijzingen[wpId] = []);
+        if (!lijst.includes(uid)) lijst.push(uid);
+      };
+      const perNaam = {};
+      Object.values(this.gebruikers).forEach((g) => { perNaam[g.naam] = g.id; });
+      this.werkpakketten.forEach((w) => {
+        if (perNaam[w.engineer]) wijsToe(w.id, perNaam[w.engineer]);
+        Object.entries(window.SEED_OM_PROJECTEN || {}).forEach(([uid, projecten]) => {
+          if (this.gebruikers[uid] && projecten.includes(w.project)) wijsToe(w.id, uid);
+        });
+      });
+      const wpIds = new Set(this.werkpakketten.map((w) => w.id));
+      (window.SEED_DEV_WPS || []).filter((id) => wpIds.has(id)).forEach((id) => wijsToe(id, '__dev__'));
+    }
     if (this.instellingen.peildatum) {
       const d = parseDatum(this.instellingen.peildatum);
       if (d) VANDAAG = d;
@@ -503,6 +526,7 @@ function render() {
   renderOverzicht();
   renderPlanning();
   renderTaken();
+  if (typeof renderWerklijst === 'function') renderWerklijst();
   renderVergunningen();
   if (typeof renderZro === 'function') renderZro();
   if (typeof renderOnderzoeken === 'function') renderOnderzoeken();

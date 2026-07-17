@@ -8122,3 +8122,39 @@ window.SEED_VERGUNNINGEN = [
   {"id":"vg-seed-14","wpId":"Wolvega|WP1-w|OSO1 Wolvega (MSR01???)|MSR02 Stadsburen 16","type":"omgevingsvergunning","status":"ontwerpbesluit","omschrijving":"Omgevingsplanactiviteit — afwijking t.b.v. bovengronds afsluiterhuisje","bevoegdGezag":"Gemeente Weststellingwerf","zaaknummer":"WSW-2026-01388","procedure":"uitgebreid","behandelaar":"S. Veldman (omgevingsmanager)","aangevraagd":"2026-01-19","verwachtBesluit":"2026-07-20","datumVerleend":"","datumOnherroepelijk":"","leges":3140,"voorschriften":"","notitie":"Ontwerpbesluit ter inzage t/m 3-7; nog geen zienswijzen."},
   {"id":"vg-seed-15","wpId":"Wolvega|WP2-w|MSR02 Stadsburen 16|MSR03 Kooiweg bd Schipsloot MSR","type":"toestemming","status":"voorbereiding","omschrijving":"Toestemming Liander parallelligging MS-kabel","bevoegdGezag":"Liander","zaaknummer":"","procedure":"","behandelaar":"J. Douma (omgevingsmanager)","aangevraagd":"","verwachtBesluit":"","datumVerleend":"","datumOnherroepelijk":"","leges":"","voorschriften":"","notitie":"Proefsleuven gepland om exacte ligging te bepalen."},
 ];
+
+/* ==========================================================================
+   Testgebruikers & toewijzingen — de engineers uit SEED_WERKPAKKETTEN plus
+   omgevingsmanagers (dezelfde namen als de behandelaars/grondverwervers in de
+   registers), een ontwerpleider en een projectleider. Toewijzingen worden bij
+   het laden afgeleid: elke engineer krijgt zijn eigen werkpakketten, de
+   omgevingsmanagers hun projecten, en de devmodus-gebruiker (__dev__) een
+   demo-set zodat "Mijn projecten" en "Mijn taken" direct gevuld zijn.
+   E-mailadressen zijn fictief. Zie State.laad in app.js.
+   ========================================================================== */
+window.SEED_GEBRUIKERS = [
+  { id: '__dev__',        naam: 'Devmodus',              email: '',                          role: 'manager',         sinds: '2026-01-05' },
+  { id: 'seed-u-cammen',  naam: 'Lucas van der Cammen',  email: 'l.vandercammen@hvp.test',   role: 'engineer',        sinds: '2026-01-05' },
+  { id: 'seed-u-hamel',   naam: 'Frans Hamelijnck',      email: 'f.hamelijnck@hvp.test',     role: 'engineer',        sinds: '2026-01-05' },
+  { id: 'seed-u-teening', naam: 'Peter Teeninga',        email: 'p.teeninga@hvp.test',       role: 'engineer',        sinds: '2026-01-05' },
+  { id: 'seed-u-verkoe',  naam: 'Dennis Verkoeijen',     email: 'd.verkoeijen@hvp.test',     role: 'engineer',        sinds: '2026-01-12' },
+  { id: 'seed-u-misic',   naam: 'Gabor Misic',           email: 'g.misic@hvp.test',          role: 'engineer',        sinds: '2026-01-12' },
+  { id: 'seed-u-papen',   naam: 'Thierry Papenhuijzen',  email: 't.papenhuijzen@hvp.test',   role: 'engineer',        sinds: '2026-02-02' },
+  { id: 'seed-u-slomp',   naam: 'Robin Slomp',           email: 'r.slomp@hvp.test',          role: 'engineer',        sinds: '2026-02-02' },
+  { id: 'seed-u-douma',   naam: 'Jelmer Douma',          email: 'j.douma@hvp.test',          role: 'omgevingsmanager', sinds: '2026-01-05' },
+  { id: 'seed-u-veldman', naam: 'Sytske Veldman',        email: 's.veldman@hvp.test',        role: 'omgevingsmanager', sinds: '2026-01-05' },
+  { id: 'seed-u-dijk',    naam: 'Marieke van Dijk',      email: 'm.vandijk@hvp.test',        role: 'ontwerpleider',   sinds: '2026-01-05' },
+  { id: 'seed-u-kooistra',naam: 'Bart Kooistra',         email: 'b.kooistra@hvp.test',       role: 'projectleider',   sinds: '2026-01-05' },
+];
+// Omgevingsmanagers per project (voor de afgeleide toewijzingen).
+window.SEED_OM_PROJECTEN = { 'seed-u-douma': ['Spannenburg', 'Joure'], 'seed-u-veldman': ['Wolvega', 'Luinjeberd'] };
+// Demo-set voor de devmodus-gebruiker: gevarieerd over projecten en fasen.
+window.SEED_DEV_WPS = [
+  'Spannenburg|WP1|RS Tjerkgaast|DR01',
+  'Spannenburg|WP2|DR01|DR02',
+  'Spannenburg|WP4|DR03|DR04',
+  'Joure|WP1|RS Jou|DR06',
+  'Joure|WP2|DR06|DR04',
+  'Luinjeberd|WP1|AC5|DR-01',
+  'Wolvega|WP1-w|OSO1 Wolvega (MSR01???)|MSR02 Stadsburen 16',
+];

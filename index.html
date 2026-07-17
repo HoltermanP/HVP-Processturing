@@ -21,6 +21,7 @@
         <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
         <button class="tab" data-tab="mijn"><span class="ico">★</span>Mijn projecten</button>
         <button class="tab" data-tab="mijntaken"><span class="ico">☑</span>Mijn taken</button>
+        <button class="tab" data-tab="werklijst"><span class="ico">☰</span>Werklijst</button>
         <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
         <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
         <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
@@ -98,6 +99,18 @@
         <div class="seg-control" id="mtHorizonKiezer"></div>
       </div>
       <div id="mtInhoud"></div>
+    </section>
+
+    <!-- ================= WERKLIJST (trechter + stappenplan) ================= -->
+    <section id="view-werklijst" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Werklijst</h2>
+          <p>Van grof naar fijn: klik een project open naar APD's en werkpakketten. Per werkpakket zie je waar het staat ("hier zijn we"), wat de volgende stap is, waar het op wacht — en je handelt stappen direct af met de knoppen. Filter met de balk bovenaan.</p>
+        </div>
+      </div>
+      <div class="card"><div id="wlKpis" class="taken-stats"></div></div>
+      <div id="wlInhoud" class="wl-boom"></div>
     </section>
 
     <!-- ================= PLANNING ================= -->
@@ -535,6 +548,7 @@
   <script src="js/registers.js"></script>
   <script src="js/zro.js"></script>
   <script src="js/onderzoeken.js"></script>
+  <script src="js/werklijst.js"></script>
   <script src="js/tsb.js"></script>
   <script src="js/tolgates.js"></script>
   <script src="js/wijzigingen.js"></script>

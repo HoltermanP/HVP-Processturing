@@ -148,7 +148,11 @@ function renderMijnTaken() {
     groep('Deze week starten', dezeWeek, '#f59e0b', 'gepland of uiterlijk te starten binnen 7 dagen') +
     groep('Daarna in deze periode', later, '#3b82f6', 'volgens de faseplanning');
 
-  cont.innerHTML = statsHtml + (inhoud || '<div class="card"><div class="leeg">Geen taken in deze periode — alles is gereed of gepland na de gekozen horizon. 👍</div></div>');
+  cont.innerHTML = statsHtml + '<div id="mtNu"></div>' + (inhoud || '<div class="card"><div class="leeg">Geen taken in deze periode — alles is gereed of gepland na de gekozen horizon. 👍</div></div>');
+
+  // "Nu aan de beurt": per toegewezen werkpakket de eerstvolgende stap,
+  // direct af te handelen zonder de detail-drawer te openen (werklijst.js).
+  if (typeof renderNuAanDeBeurt === 'function') renderNuAanDeBeurt('#mtNu', mijn, () => render());
 
   els('#mtInhoud .taak[data-wp]').forEach((t) => t.addEventListener('click', () => openDetail(t.dataset.wp)));
   if (typeof bindTaakHulp === 'function') bindTaakHulp('#mtInhoud');

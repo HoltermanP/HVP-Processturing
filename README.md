@@ -23,6 +23,17 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
   die fase hebben afgerond. Activiteiten kunnen als **restpunt** (⚑) worden
   gemarkeerd: die schuiven door naar een volgende fase en blokkeren de
   gereedmelding niet.
+- **Werklijst** — taken afhandelen en voortgang bewaken van grof naar fijn:
+  klik een project open naar APD's en werkpakketten, met per niveau een
+  voortgangsbalk en het aantal openstaande stappen. Per werkpakket toont het
+  stappenplan waar het staat (*hier zijn we*), de volgende stap voluit
+  beschreven, en knoppen om die direct af te handelen (**Bezig · Gereed ·
+  Geblokkeerd**). Openstaande conditionering uit de registers (onderzoeken
+  gereed vóór einde UO; vergunningen verleend en ZRO's getekend vóór contract
+  gereed) verschijnt als *"wacht op …"* bij taak en werkpakket. Dezelfde
+  "Nu aan de beurt"-kaarten staan bovenaan **Mijn taken**, zodat iedere
+  gebruiker per toegewezen werkpakket direct de eerstvolgende stap ziet en
+  afvinkt zonder door schermen te hoeven klikken.
 - **Taken** — alles wat de **komende periode** moet gebeuren, berekend uit de
   fasevensters en doorlooptijden. **Kritieke** taken en taken die **gevaar lopen**
   staan bovenaan. De vooruitkijk-**horizon is instelbaar** (2 weken t/m kwartaal).
