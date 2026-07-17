@@ -62,6 +62,7 @@ const State = {
   snapshots: [],
   instellingen: {},
   vergunningen: [],
+  onderzoeken: [],
   risicos: [],
   gebruikers: {},
   toewijzingen: {},
@@ -81,6 +82,8 @@ const State = {
   takenFilter: 'alle',
   vgFilter: 'alle',
   zroFilter: 'alle',
+  ozFilter: 'alle',
+  ozCatFilter: '',
   dashScope: 'portfolio',
 
   async laad() {
@@ -90,6 +93,7 @@ const State = {
     this.snapshots = staat.snapshots || [];
     this.instellingen = staat.instellingen || {};
     this.vergunningen = staat.vergunningen || [];
+    this.onderzoeken = staat.onderzoeken || [];
     this.risicos = staat.risicos || [];
     this.gebruikers = staat.gebruikers || {};
     this.toewijzingen = staat.toewijzingen || {};
@@ -109,6 +113,14 @@ const State = {
     if (verseSeed && Object.keys(this.voortgang).length === 0 && window.SEED_VOORTGANG) {
       this.voortgang = JSON.parse(JSON.stringify(window.SEED_VOORTGANG));
     }
+    // Onderzoeken-register nog leeg? Vul 'm met de realistische voorbeelddata
+    // uit seed.js, gekoppeld aan de werkpakketten die nu daadwerkelijk bestaan
+    // (werkt dus ook na een CSV-import met dezelfde wp-id's). Zodra er zelf
+    // onderzoeken zijn vastgelegd en bewaard, blijft dit weg.
+    if (!this.onderzoeken.length && window.SEED_ONDERZOEKEN) {
+      const wpIds = new Set(this.werkpakketten.map((w) => w.id));
+      this.onderzoeken = window.SEED_ONDERZOEKEN.filter((o) => wpIds.has(o.wpId)).map((o) => ({ ...o }));
+    }
     if (this.instellingen.peildatum) {
       const d = parseDatum(this.instellingen.peildatum);
       if (d) VANDAAG = d;
@@ -122,6 +134,7 @@ const State = {
       snapshots: this.snapshots,
       instellingen: this.instellingen,
       vergunningen: this.vergunningen,
+      onderzoeken: this.onderzoeken,
       risicos: this.risicos,
       gebruikers: this.gebruikers,
       toewijzingen: this.toewijzingen,
@@ -482,6 +495,7 @@ function render() {
   renderTaken();
   renderVergunningen();
   if (typeof renderZro === 'function') renderZro();
+  if (typeof renderOnderzoeken === 'function') renderOnderzoeken();
   if (typeof renderTsb === 'function') renderTsb();
   if (typeof renderWijzigingen === 'function') renderWijzigingen();
   if (typeof renderSchouwen === 'function') renderSchouwen();
@@ -503,7 +517,7 @@ function gateUI() {
     const n = el(s); if (n) n.disabled = !vol;
   });
   document.querySelectorAll('.filebtn').forEach((l) => l.classList.toggle('uit', !vol));
-  ['#vgToevoegen', '#zroToevoegen'].forEach((s) => { const n = el(s); if (n) n.style.display = vol ? '' : 'none'; });
+  ['#vgToevoegen', '#zroToevoegen', '#ozToevoegen'].forEach((s) => { const n = el(s); if (n) n.style.display = vol ? '' : 'none'; });
   const setTab = (naam, zicht) => { const t = document.querySelector(`.tab[data-tab="${naam}"]`); if (t) t.style.display = zicht ? '' : 'none'; };
   setTab('toewijzen', !window.Auth || Auth.magToewijzen());
   setTab('accounts', !window.Auth || Auth.magAccounts());
@@ -1204,6 +1218,10 @@ function renderDetail(wpId) {
   });
   el('#detailRegisters').innerHTML = (magBew ? '' : leesAlleenBanner(w)) + detailRegistersHtml(w);
   bindDetailRegisters(w);
+  if (typeof detailOnderzoekenHtml === 'function') {
+    el('#detailOnderzoeken').innerHTML = detailOnderzoekenHtml(w);
+    bindDetailOnderzoeken(w);
+  }
   const dis = magBew ? '' : ' disabled';
   el('#detailFasen').innerHTML = FASES.map((f) => {
     const fv = faseVoortgang(w, f);
@@ -1568,6 +1586,7 @@ function renderDashboard() {
   if (typeof renderDashboardTsb === 'function') renderDashboardTsb();
   if (typeof renderDashboardTolgates === 'function') renderDashboardTolgates();
   if (typeof renderDashboardWijzigingen === 'function') renderDashboardWijzigingen();
+  if (typeof renderDashboardOnderzoeken === 'function') renderDashboardOnderzoeken();
 }
 
 /* ----------------------- Dashboard: interactie & visuals ----------------- */
@@ -1813,6 +1832,7 @@ function bouwRapportData(scope, van, tot, label) {
     terugblik: { mijlpalenInPeriode: mpPeriode },
     vooruitblik: { naderendeMijlpalen: mpKomend.slice(0, 25), reedsTeLaat, dreigtTeLaat, nietGetoond },
     registers: registerRapportData(scope),
+    onderzoeken: typeof onderzoekenRapportData === 'function' ? onderzoekenRapportData(scope) : null,
     tsb: typeof tsbRapportData === 'function' ? tsbRapportData(scope) : null,
     wijzigingen: typeof wijzigingenRapportData === 'function' ? wijzigingenRapportData(scope) : null,
     schouwen: typeof schouwRapportData === 'function' ? schouwRapportData(scope) : null,
@@ -1841,9 +1861,10 @@ ${rapportFormat
 ## Voortgang & KPI's   (kerncijfers; gebruik een korte Markdown-tabel)
 ## Financiën — TSB, uren & kosten   (ALLEEN als het veld "tsb" in de data gevuld is: begroot versus besteed in uren en euro's per project, opvallende over-/onderschrijdingen (pctBesteedBedrag > 100 = overschrijding) en wat dat betekent voor de sturing; laat deze sectie anders volledig weg)
 ## Wijzigingen & VTW's   (ALLEEN als het veld "wijzigingen" in de data gevuld is: openstaande en ingediende wijzigingen met hun financiële impact, de opgestelde VTW's met totaalbedrag, en welke besluiten van de opdrachtgever nog openstaan; compacte tabel toegestaan; laat deze sectie anders volledig weg)
+## Conditionerende onderzoeken   (ALLEEN als het veld "onderzoeken" in de data gevuld is: stand per categorie (Natura 2000, bodem, flora & fauna, archeologie, NGE, etc. — nog uit te zetten / lopend / gereed), onderzoeken die over hun verwachte datum zijn, waar vervolgonderzoek of een ontheffing nodig is, en waar de geldigheid verloopt of al is verlopen; laat deze sectie anders volledig weg)
 ## Vroegsignalering — dreigt te laat   (acties die nu om een besluit/start vragen vóór hun uiterste startdatum; als tabel met uiterste startdatum en fase-einde, geprioriteerd)
-## Reeds te laat & blokkades   (over-datum acties, geblokkeerd/issue; betrek vergunningen/ZRO die over de besluitdatum zijn)
-## Vooruitblik komende periode   (naderende mijlpalen, openstaande vergunningen/ZRO en wat er concreet gedaan moet worden)
+## Reeds te laat & blokkades   (over-datum acties, geblokkeerd/issue; betrek vergunningen/ZRO en onderzoeken die over hun datum zijn)
+## Vooruitblik komende periode   (naderende mijlpalen, openstaande vergunningen/ZRO/onderzoeken en wat er concreet gedaan moet worden)
 ## Aanbevelingen   (3-6 puntsgewijze, actiegerichte aanbevelingen)`}
 
 Houd het bondig maar volledig; vermijd holle frasen en herhaling.`;
@@ -2276,6 +2297,7 @@ async function init() {
   await State.laad();
   Auth.koppelGebruiker();        // registreer gebruiker + bepaal rol
   registersInit();
+  if (typeof onderzoekenInit === 'function') onderzoekenInit();
   if (typeof wijzigingenInit === 'function') wijzigingenInit();
   if (typeof documentFormatsInit === 'function') documentFormatsInit();
   if (typeof schouwInit === 'function') schouwInit();
@@ -2352,7 +2374,7 @@ async function init() {
     reader.readAsArrayBuffer(file); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances, wijzigingen: State.wijzigingen, vtws: State.vtws, schouwen: State.schouwen }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, onderzoeken: State.onderzoeken, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances, wijzigingen: State.wijzigingen, vtws: State.vtws, schouwen: State.schouwen }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
@@ -2366,6 +2388,7 @@ async function init() {
         if (data.doorlooptijden) State.doorlooptijden = data.doorlooptijden;
         if (data.snapshots) State.snapshots = data.snapshots;
         if (data.vergunningen) State.vergunningen = data.vergunningen;
+        if (data.onderzoeken) State.onderzoeken = data.onderzoeken;
         if (data.risicos) State.risicos = data.risicos;
         if (data.activiteitInfo) State.activiteitInfo = data.activiteitInfo;
         if (data.tsb) State.tsb = data.tsb;
@@ -2382,10 +2405,11 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnSeed').addEventListener('click', () => {
-    if (!confirm('Alle projecten, planning én statussen opnieuw laden uit de engineeringsplanning? Doorlooptijden, vergunningen en risico’s worden gewist.')) return;
+    if (!confirm('Alle projecten, planning én statussen opnieuw laden uit de engineeringsplanning? Doorlooptijden, vergunningen, onderzoeken en risico’s worden gewist (en de onderzoeken herladen als voorbeelddata).')) return;
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
     State.voortgang = window.SEED_VOORTGANG ? JSON.parse(JSON.stringify(window.SEED_VOORTGANG)) : {};
     State.doorlooptijden = {}; State.vergunningen = []; State.risicos = [];
+    State.onderzoeken = window.SEED_ONDERZOEKEN ? window.SEED_ONDERZOEKEN.map((o) => ({ ...o })) : [];
     State.filters = { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' };
     el('#filterZoek').value = '';
     State.bewaar(); render(); toonTab('overzicht');
@@ -2396,7 +2420,7 @@ async function init() {
     localStorage.removeItem(CACHE_KEY);
     await DB.wisNeon();
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
-    State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = []; State.vergunningen = []; State.risicos = []; State.activiteitInfo = {};
+    State.voortgang = {}; State.doorlooptijden = {}; State.snapshots = []; State.vergunningen = []; State.onderzoeken = []; State.risicos = []; State.activiteitInfo = {};
     State.tsb = { formats: [], projecten: [], instellingen: {} };
     State.tolgates = JSON.parse(JSON.stringify(window.STANDAARD_TOLGATES || []));
     State.tolgateInstances = [];

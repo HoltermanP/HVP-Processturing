@@ -25,6 +25,7 @@
         <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
         <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
         <button class="tab" data-tab="zro"><span class="ico">⚖</span>ZRO</button>
+        <button class="tab" data-tab="onderzoeken"><span class="ico">⚗</span>Onderzoeken</button>
         <button class="tab" data-tab="schouwen"><span class="ico">⌖</span>Schouwen</button>
         <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
         <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
@@ -153,6 +154,23 @@
       <div id="zroInhoud"></div>
     </section>
 
+    <!-- ================= ONDERZOEKEN (conditionerend) ================= -->
+    <section id="view-onderzoeken" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Onderzoeken</h2>
+          <p>Conditionerende (bureau-)onderzoeken per werkpakket — Natura 2000/stikstof, bodem, flora &amp; fauna, archeologie, NGE, kabels &amp; leidingen, geotechniek, water, houtopstanden, akoestiek, luchtkwaliteit, externe veiligheid, asbest, cultuurhistorie en m.e.r. Houd bij wat er is uitgezet, wanneer het terug wordt verwacht en of er vervolgonderzoek nodig is of de geldigheid verloopt.</p>
+        </div>
+        <button class="primair" id="ozToevoegen"><span class="ico">＋</span> Toevoegen</button>
+      </div>
+      <div class="card"><div id="ozKpis" class="taken-stats"></div></div>
+      <div class="card">
+        <div class="card-kop"><h2>Per categorie</h2><span class="hint">Klik op een categorie om de tabel te filteren</span></div>
+        <div id="ozCatGrid" class="oz-cat-grid"></div>
+      </div>
+      <div id="ozInhoud"></div>
+    </section>
+
     <!-- ================= SCHOUWEN ================= -->
     <section id="view-schouwen" class="view">
       <div class="section-kop">
@@ -248,6 +266,11 @@
       <div class="card" id="dashWzKaart" style="display:none">
         <div class="card-kop"><h2>Wijzigingen &amp; VTW's</h2><span class="hint">aantal en kosten binnen de gekozen scope · klik voor het register</span></div>
         <div id="dashWz" class="taken-stats"></div>
+      </div>
+
+      <div class="card" id="dashOzKaart" style="display:none">
+        <div class="card-kop"><h2>Conditionerende onderzoeken</h2><span class="hint">stand van bureau-onderzoeken binnen de gekozen scope · klik voor het register</span></div>
+        <div id="dashOz" class="taken-stats"></div>
       </div>
 
       <div class="card" id="dashTolgatesKaart">
@@ -481,6 +504,7 @@
     <div id="detailProces"></div>
     <div id="detailKengetallen" class="kengetallen"></div>
     <div id="detailRegisters"></div>
+    <div id="detailOnderzoeken"></div>
     <div class="drawer-grid">
       <div>
         <h3>Mijlpalen</h3>
@@ -509,6 +533,7 @@
   <script src="js/db.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/registers.js"></script>
+  <script src="js/onderzoeken.js"></script>
   <script src="js/tsb.js"></script>
   <script src="js/tolgates.js"></script>
   <script src="js/wijzigingen.js"></script>

@@ -42,6 +42,7 @@ const DB = (() => {
       snapshots: cache.snapshots || [],
       instellingen: cache.instellingen || {},
       vergunningen: cache.vergunningen || [],
+      onderzoeken: cache.onderzoeken || [],
       risicos: cache.risicos || [],
       gebruikers: cache.gebruikers || {},
       toewijzingen: cache.toewijzingen || {},
@@ -66,6 +67,7 @@ const DB = (() => {
           if (Array.isArray(d.snapshots)) staat.snapshots = d.snapshots;
           if (d.instellingen) staat.instellingen = d.instellingen;
           if (Array.isArray(d.vergunningen)) staat.vergunningen = d.vergunningen;
+          if (Array.isArray(d.onderzoeken)) staat.onderzoeken = d.onderzoeken;
           if (Array.isArray(d.risicos)) staat.risicos = d.risicos;
           if (d.gebruikers) staat.gebruikers = d.gebruikers;
           if (d.toewijzingen) staat.toewijzingen = d.toewijzingen;
@@ -109,6 +111,7 @@ const DB = (() => {
           snapshots: staat.snapshots,
           instellingen: staat.instellingen,
           vergunningen: staat.vergunningen,
+          onderzoeken: staat.onderzoeken,
           risicos: staat.risicos,
           gebruikers: staat.gebruikers,
           toewijzingen: staat.toewijzingen,

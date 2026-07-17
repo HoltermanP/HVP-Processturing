@@ -702,6 +702,17 @@ tr.rij-uitklap .wp-uitklap{margin:0}
 .reg-mini-lijst .leeg-mini{color:var(--faint);cursor:default;justify-content:flex-start}
 .reg-mini-lijst .leeg-mini:hover{color:var(--faint)}
 
+/* Onderzoeken: categorie-overzicht (per type conditionerend onderzoek) */
+.oz-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:16px}
+.oz-cat{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+.oz-cat-label{font-size:12px;font-weight:650;color:var(--ink)}
+.oz-cat-tel{font-size:11.5px;color:var(--sub)}
+.oz-cat-tel strong{color:var(--amber)}
+.oz-cat.klikbaar{cursor:pointer;transition:.12s}
+.oz-cat.klikbaar:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow)}
+.oz-cat.klikbaar:focus-visible{outline:none;box-shadow:var(--ring)}
+.oz-cat.actief{border-color:var(--accent);background:#fff;box-shadow:0 0 0 2px var(--accent) inset}
+
 /* ============================ Modal ============================ */
 .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);opacity:0;pointer-events:none;transition:.2s;z-index:60;backdrop-filter:blur(2px)}
 .modal-overlay.show{opacity:1;pointer-events:auto}
