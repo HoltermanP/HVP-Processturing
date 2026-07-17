@@ -121,6 +121,16 @@ const State = {
       const wpIds = new Set(this.werkpakketten.map((w) => w.id));
       this.onderzoeken = window.SEED_ONDERZOEKEN.filter((o) => wpIds.has(o.wpId)).map((o) => ({ ...o }));
     }
+    // Zelfde principe voor de ZRO's en vergunningen: registerdeel nog leeg?
+    // Toon de voorbeelddossiers, gekoppeld aan de bestaande werkpakketten.
+    if (!this.vergunningen.some((v) => v.type === 'zro') && window.SEED_ZRO) {
+      const wpIds = new Set(this.werkpakketten.map((w) => w.id));
+      this.vergunningen = this.vergunningen.concat(window.SEED_ZRO.filter((z) => wpIds.has(z.wpId)).map((z) => ({ ...z })));
+    }
+    if (!this.vergunningen.some((v) => v.type !== 'zro') && window.SEED_VERGUNNINGEN) {
+      const wpIds = new Set(this.werkpakketten.map((w) => w.id));
+      this.vergunningen = this.vergunningen.concat(window.SEED_VERGUNNINGEN.filter((s) => wpIds.has(s.wpId)).map((s) => ({ ...s })));
+    }
     if (this.instellingen.peildatum) {
       const d = parseDatum(this.instellingen.peildatum);
       if (d) VANDAAG = d;
@@ -2405,7 +2415,7 @@ async function init() {
     reader.readAsText(file, 'utf-8'); e.target.value = '';
   });
   el('#btnSeed').addEventListener('click', () => {
-    if (!confirm('Alle projecten, planning én statussen opnieuw laden uit de engineeringsplanning? Doorlooptijden, vergunningen, onderzoeken en risico’s worden gewist (en de onderzoeken herladen als voorbeelddata).')) return;
+    if (!confirm('Alle projecten, planning én statussen opnieuw laden uit de engineeringsplanning? Doorlooptijden, vergunningen, onderzoeken en risico’s worden gewist (onderzoeken, vergunningen en ZRO’s herladen als voorbeelddata).')) return;
     State.werkpakketten = (window.SEED_WERKPAKKETTEN || []).map((w) => ({ ...w }));
     State.voortgang = window.SEED_VOORTGANG ? JSON.parse(JSON.stringify(window.SEED_VOORTGANG)) : {};
     State.doorlooptijden = {}; State.vergunningen = []; State.risicos = [];

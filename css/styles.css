@@ -941,3 +941,9 @@ select.tsb-inp{text-align:left;width:auto}
   .sch-fotos{grid-template-columns:repeat(3,1fr)}
   .sch-rap-fotos{grid-template-columns:1fr}
 }
+
+/* ------------------------------ ZRO-concept ------------------------------ */
+.zro-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.zro-toolbar .spacer{flex:1}
+.zro-doc{margin-top:10px;max-height:56vh;overflow:auto;white-space:pre-wrap;font-family:"Iowan Old Style",Georgia,"Times New Roman",serif;font-size:13.5px;line-height:1.5;background:#fbfbf7;border:1px solid var(--line);border-radius:10px;padding:18px 20px;outline:none}
+.zro-doc:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}

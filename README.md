@@ -60,6 +60,19 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
   professioneel standaardformat) en gebruikt daarbij de wijzigingen plus de
   beschikbare projectinformatie. VTW's worden bewaard in een register en zijn
   te downloaden als HTML.
+- **ZRO / zakelijk recht** — grondzakenregister per werkpakket: grondeigenaar
+  (met adres/contact en eventuele pachter), kadastrale aanduiding, soort recht
+  (opstalrecht, erfdienstbaarheid, gedoogplicht, …), belemmerde strook
+  (breedte × lengte), vergoedingen (zakelijk recht en gewas-/structuurschade),
+  grondverwerver en notaris. De statusflow volgt de verwerving: *te benaderen →
+  in gesprek → mondeling akkoord → concept verstuurd → getekend → notarieel
+  gepasseerd*, met *gedoogplicht-procedure* als terugvaloptie. Met
+  **📄 Concept-ZRO** stel je uit de vastgelegde gegevens een complete
+  concept-overeenkomst op (ontbrekende gegevens verschijnen als [placeholders]);
+  de tekst is direct bewerkbaar, te kopiëren, te printen of te downloaden als
+  Word-bestand, en optioneel aan te scherpen met AI. Het concept is ter
+  voorbereiding — de definitieve tekst hoort langs de notaris of jurist
+  grondzaken.
 - **Schouwen** — bekijk en beoordeel de situatie ter plaatse, in **elke fase**.
   Een schouw hoort bij een **APD** binnen een project en bestaat uit meerdere
   **delen**: je rijdt naar een locatie, legt daar foto's vast en rijdt door naar
