@@ -1137,8 +1137,8 @@ select.tsb-inp{text-align:left;width:auto}
   border:1px solid var(--line);
 }
 .kaart-wrap svg{display:block;width:100%;height:auto}
-.kx-land{stroke:#ffffff;stroke-width:3.5;stroke-linejoin:round;filter:drop-shadow(0 4px 5px rgba(28,52,72,.25))}
-.kx-land-diepte{fill:#3a5a33;opacity:.85}
+.kx-land{stroke:#ffffff;stroke-width:4.5;stroke-linejoin:round;filter:drop-shadow(0 4px 5px rgba(28,52,72,.25))}
+.kx-land-diepte{opacity:.92}
 .kx-perceel{font-size:22px;font-style:italic;font-weight:800;fill:#17231b;opacity:.9;letter-spacing:.3px;paint-order:stroke;stroke:rgba(255,255,255,.45);stroke-width:2.5}
 .kx-marker{cursor:pointer}
 .kx-marker.uit{cursor:help}

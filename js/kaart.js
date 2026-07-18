@@ -191,20 +191,27 @@
       .map((m) => markerSvg(m.loc, m.info)).join('');
     return `<svg viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg" aria-label="Projectenkaart Perceel 1">
       <defs>
-        <radialGradient id="kxLicht" cx="0.3" cy="0.18" r="1.05">
-          <stop offset="0" stop-color="#ffffff" stop-opacity=".22"/>
-          <stop offset=".45" stop-color="#ffffff" stop-opacity="0"/>
-          <stop offset="1" stop-color="#122015" stop-opacity=".22"/>
+        <linearGradient id="kxDiepteGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#4c7442"/><stop offset=".5" stop-color="#2e4b28"/><stop offset="1" stop-color="#182b16"/>
+        </linearGradient>
+        <radialGradient id="kxLicht" cx="0.28" cy="0.16" r="1.05">
+          <stop offset="0" stop-color="#ffffff" stop-opacity=".16"/>
+          <stop offset=".4" stop-color="#ffffff" stop-opacity="0"/>
+          <stop offset="1" stop-color="#0c1710" stop-opacity=".3"/>
         </radialGradient>
-        <filter id="kxWaas" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"/></filter>
+        <filter id="kxWaas" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="10"/></filter>
+        <filter id="kxKorrel" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" result="ruis"/>
+          <feColorMatrix in="ruis" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0.5 0.5 0 0"/>
+        </filter>
         <clipPath id="kxKlem"><path d="${PAD_FRIESLAND}"/><path d="${PAD_POLDER}"/></clipPath>
       </defs>
 
-      <g filter="url(#kxWaas)" transform="translate(8,26)" opacity=".24">
+      <g filter="url(#kxWaas)" transform="translate(9,28)" opacity=".26">
         <path d="${PAD_FRIESLAND}" fill="#0f2338"/><path d="${PAD_POLDER}" fill="#0f2338"/>
       </g>
-      <g transform="translate(0,8)">
-        <path class="kx-land-diepte" d="${PAD_FRIESLAND}"/><path class="kx-land-diepte" d="${PAD_POLDER}"/>
+      <g transform="translate(0,13)">
+        <path class="kx-land-diepte" d="${PAD_FRIESLAND}" fill="url(#kxDiepteGrad)"/><path class="kx-land-diepte" d="${PAD_POLDER}" fill="url(#kxDiepteGrad)"/>
       </g>
       <path class="kx-land" d="${PAD_FRIESLAND}" fill="#6a9c58"/>
       <path class="kx-land" d="${PAD_POLDER}" fill="#6a9c58"/>
@@ -212,16 +219,18 @@
       <g clip-path="url(#kxKlem)" pointer-events="none">
         ${veldMozaiek(20, 70, 670, 340, 20, 1)}
         ${veldMozaiek(160, 335, 460, 535, 18, 2)}
-        <ellipse cx="118" cy="252" rx="22" ry="9" fill="#3a5c33" opacity=".55"/>
-        <ellipse cx="452" cy="214" rx="17" ry="7" fill="#3a5c33" opacity=".5"/>
-        <ellipse cx="566" cy="224" rx="19" ry="8" fill="#3a5c33" opacity=".5"/>
-        <ellipse cx="300" cy="96" rx="14" ry="6" fill="#3a5c33" opacity=".45"/>
-        <ellipse cx="424" cy="374" rx="20" ry="8" fill="#3a5c33" opacity=".5"/>
-        <ellipse cx="214" cy="508" rx="15" ry="6" fill="#3a5c33" opacity=".45"/>
-        <path d="M 180 244 C 260 220, 330 208, 428 196 C 500 188, 560 172, 622 152" fill="none" stroke="#f4f1e6" stroke-width="1.6" opacity=".4"/>
-        <path d="M 296 302 C 306 276, 318 246, 330 208" fill="none" stroke="#f4f1e6" stroke-width="1.3" opacity=".35"/>
-        <path d="M 300 320 C 306 336, 310 352, 308 376 C 306 398, 304 408, 306 416 C 308 442, 326 468, 356 490" fill="none" stroke="#f4f1e6" stroke-width="1.6" opacity=".4"/>
-        <path d="M 306 416 C 260 420, 224 432, 196 448" fill="none" stroke="#f4f1e6" stroke-width="1.1" opacity=".4"/>
+        <rect x="0" y="0" width="760" height="560" fill="#1f4a24" opacity=".22"/>
+        <ellipse cx="118" cy="252" rx="22" ry="9" fill="#345831" opacity=".6"/>
+        <ellipse cx="452" cy="214" rx="17" ry="7" fill="#345831" opacity=".55"/>
+        <ellipse cx="566" cy="224" rx="19" ry="8" fill="#345831" opacity=".55"/>
+        <ellipse cx="300" cy="96" rx="14" ry="6" fill="#345831" opacity=".5"/>
+        <ellipse cx="424" cy="374" rx="20" ry="8" fill="#345831" opacity=".55"/>
+        <ellipse cx="214" cy="508" rx="15" ry="6" fill="#345831" opacity=".5"/>
+        <path d="M 180 244 C 260 220, 330 208, 428 196 C 500 188, 560 172, 622 152" fill="none" stroke="#eef0e4" stroke-width="1.6" opacity=".38"/>
+        <path d="M 296 302 C 306 276, 318 246, 330 208" fill="none" stroke="#eef0e4" stroke-width="1.3" opacity=".32"/>
+        <path d="M 300 320 C 306 336, 310 352, 308 376 C 306 398, 304 408, 306 416 C 308 442, 326 468, 356 490" fill="none" stroke="#eef0e4" stroke-width="1.6" opacity=".38"/>
+        <path d="M 306 416 C 260 420, 224 432, 196 448" fill="none" stroke="#eef0e4" stroke-width="1.1" opacity=".38"/>
+        <rect x="0" y="0" width="760" height="560" fill="#000000" filter="url(#kxKorrel)" opacity=".1"/>
       </g>
       <path d="${PAD_FRIESLAND}" fill="url(#kxLicht)" pointer-events="none"/>
       <path d="${PAD_POLDER}" fill="url(#kxLicht)" pointer-events="none"/>
