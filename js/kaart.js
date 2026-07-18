@@ -259,7 +259,6 @@
     State.filters.project = project;
     State.filters.apd = '';
     State.filters.zoek = '';
-    const zoek = el('#filterZoek'); if (zoek) zoek.value = '';
     render();
     toonTab('overzicht');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -302,7 +301,9 @@
 
       // Labels staan dicht op elkaar; zet de gehover(st)e marker vóór de rest
       // zodat zijn hele naamchip klikbaar blijft, ook als buren eroverheen vallen.
-      const naarVoren = () => g.parentNode.appendChild(g);
+      // Alleen verplaatsen als dat nodig is: reparenten tijdens een muisklik (de
+      // 'focus' die op mousedown volgt) annuleert anders het click-event.
+      const naarVoren = () => { if (g.parentNode.lastElementChild !== g) g.parentNode.appendChild(g); };
       g.addEventListener('mouseenter', () => { naarVoren(); tip.innerHTML = tipHtml(loc, info); tip.classList.add('toon'); });
       g.addEventListener('focus', naarVoren);
       g.addEventListener('mousemove', (e) => {

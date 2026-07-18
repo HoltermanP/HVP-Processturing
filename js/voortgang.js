@@ -65,7 +65,7 @@ function uvMetersGepland(w) {
 function uvBoringenGepland(w) { return +uvPlanVoor(w.id).boringen || 0; }
 function uvRealisatiesVoor(wpId) { return (State.realisaties || []).filter((r) => r.wpId === wpId); }
 
-// Werkpakketten binnen de actieve filterbalk-selectie.
+// Werkpakketten binnen de actieve filterselectie (tegels op het Overzicht).
 function uvWps() {
   const f = State.filters; const zoek = (f.zoek || '').toLowerCase();
   return State.werkpakketten.filter((w) => {

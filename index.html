@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NuLelie Procesturing — Heijmans · Pol en Voskuilen</title>
   <link rel="stylesheet" href="css/styles.css">
+  <script>
+    // Thema direct zetten (vóór de eerste paint) zodat er geen lichtflits is.
+    (function () {
+      try {
+        var t = localStorage.getItem('nulelie-thema');
+        if (t === 'medium' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { /* privémodus */ }
+    })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -17,6 +26,11 @@
         </div>
       </div>
       <div class="topbar-rechts">
+        <div id="themaKeuze" class="thema-keuze" role="group" aria-label="Kleurthema">
+          <button type="button" data-thema="light" title="Licht thema">☀</button>
+          <button type="button" data-thema="medium" title="Gedimd thema">◐</button>
+          <button type="button" data-thema="dark" title="Donker thema">●</button>
+        </div>
         <div id="dbStatus" class="db-status offline" title="Verbindingsstatus database"><span class="stip"></span><span id="dbStatusTekst">Lokaal</span></div>
         <div id="authUser" class="auth-user">
           <span id="rolBadge" class="rol-badge"></span>
@@ -26,6 +40,7 @@
     </div>
     <nav class="tabs">
       <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
+      <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
       <button class="tab" data-tab="mijn"><span class="ico">★</span>Mijn projecten</button>
       <button class="tab" data-tab="mijntaken"><span class="ico">☑</span>Mijn taken</button>
       <button class="tab" data-tab="werklijst"><span class="ico">☰</span>Werklijst</button>
@@ -39,7 +54,6 @@
       <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
       <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
       <button class="tab" data-tab="uitvoering"><span class="ico">⚒</span>Uitvoering</button>
-      <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
       <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
       <button class="tab" data-tab="toewijzen"><span class="ico">⇄</span>Toewijzen</button>
       <button class="tab" data-tab="accounts"><span class="ico">☖</span>Accounts</button>
@@ -55,23 +69,17 @@
     </div>
   </div>
 
-  <div class="filterbalk">
+  <div class="navbalk">
     <button id="navTerug" class="terug-knop" style="display:none" title="Terug naar de vorige pagina">← Terug</button>
-    <input id="filterZoek" type="search" placeholder="Zoek project, APD, werkpakket, engineer…">
-    <select id="filterProject"></select>
-    <select id="filterApd"></select>
-    <select id="filterEngineer"></select>
-    <select id="filterFase"></select>
-    <select id="filterRisico"></select>
-    <button id="filterReset" class="ghost">Reset</button>
+    <div id="filterIndicator" class="filter-indicator"></div>
   </div>
-  <div id="filterIndicator" class="filter-indicator"></div>
 
   <main>
     <!-- ================= OVERZICHT (hiërarchisch) ================= -->
     <section id="view-overzicht" class="view actief">
       <div id="kruimels" class="kruimels"></div>
       <div id="kpis" class="kpis"></div>
+      <div id="engineerTegels" class="filter-tegels"></div>
 
       <div class="card kaart-card" id="kaartKaart">
         <div class="card-kop">
@@ -119,7 +127,7 @@
       <div class="section-kop">
         <div>
           <h2>Werklijst</h2>
-          <p>Van grof naar fijn: klik een project open naar APD's en werkpakketten. Per werkpakket zie je waar het staat ("hier zijn we"), wat de volgende stap is, waar het op wacht — en je handelt stappen direct af met de knoppen. Filter met de balk bovenaan.</p>
+          <p>Van grof naar fijn: klik een project open naar APD's en werkpakketten. Per werkpakket zie je waar het staat ("hier zijn we"), wat de volgende stap is, waar het op wacht — en je handelt stappen direct af met de knoppen. Filter via de tegels op het Overzicht.</p>
         </div>
       </div>
       <div class="card"><div id="wlKpis" class="taken-stats"></div></div>
@@ -143,7 +151,7 @@
       <div class="section-kop">
         <div>
           <h2>Kritieke pad bewaking</h2>
-          <p>Per werkpakket wordt het resterende werk vanaf de peildatum doorgerekend en afgezet tegen elke komende mijlpaal — inclusief de doorwerking naar werkvoorbereiding, uitvoering en de datum klantwens. Binnen een fase rekent de projectie met het <strong>plantempo</strong> (werk dat volgens plan parallel loopt, minimaal de langste openstaande stap); fasen schakelen in serie, dus opgelopen vertraging telt door. De mijlpaal met de <strong>minste speling</strong> is het bindende punt: dát is het kritieke pad. <span style="color:var(--rood);font-weight:600">Rood</span> = wordt te laat zonder ingrijpen, <span style="color:var(--amber);font-weight:600">amber</span> = minder dan een week speling. Klik op een werkpakket voor de mijlpaalbewaking en de opbouw van het pad; filter met de balk bovenaan.</p>
+          <p>Per werkpakket wordt het resterende werk vanaf de peildatum doorgerekend en afgezet tegen elke komende mijlpaal — inclusief de doorwerking naar werkvoorbereiding, uitvoering en de datum klantwens. Binnen een fase rekent de projectie met het <strong>plantempo</strong> (werk dat volgens plan parallel loopt, minimaal de langste openstaande stap); fasen schakelen in serie, dus opgelopen vertraging telt door. De mijlpaal met de <strong>minste speling</strong> is het bindende punt: dát is het kritieke pad. <span style="color:var(--rood);font-weight:600">Rood</span> = wordt te laat zonder ingrijpen, <span style="color:var(--amber);font-weight:600">amber</span> = minder dan een week speling. Klik op een werkpakket voor de mijlpaalbewaking en de opbouw van het pad; filter via de tegels op het Overzicht.</p>
         </div>
       </div>
       <div class="card"><div id="kpKpis" class="taken-stats"></div></div>
@@ -300,6 +308,23 @@
       <div id="dashOverzicht">
         <div class="card dash-hero" id="dashHero"></div>
         <div id="dashKpis" class="kpis"></div>
+
+        <!-- Voortgang per hoofdfase: ontwerp (bouwteam) en realisatie -->
+        <div class="grid-2 dash-fasen">
+          <div class="card" id="dashBouwteamKaart">
+            <div class="card-kop"><h2>Bouwteamfase — ontwerp</h2><span class="hint">activiteitvoortgang per ontwerpfase, afgezet tegen de planning</span></div>
+            <div id="dashBouwteam"></div>
+          </div>
+          <div class="card" id="dashRealisatieKaart">
+            <div class="card-kop"><h2>Realisatiefase — uitvoering</h2><span class="hint">gerealiseerde meters &amp; boringen, productietempo en prognose</span></div>
+            <div id="dashRealisatie"></div>
+          </div>
+        </div>
+
+        <!-- Projectmanagement-KPI's, automatisch berekend uit de data -->
+        <div class="dash-sub-kop" id="dashPmKop"><h3>Projectmanagement-KPI's</h3><span class="hint">berekend uit planning, activiteitvoortgang, budget en realisatiegegevens</span></div>
+        <div id="dashPmKpis" class="kpis"></div>
+
         <div id="dashTegels" class="dash-tegels"></div>
       </div>
 
@@ -609,6 +634,7 @@
     <div id="modalBody" class="modal-body"></div>
   </div>
 
+  <script src="js/thema.js"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/activiteiten.js"></script>

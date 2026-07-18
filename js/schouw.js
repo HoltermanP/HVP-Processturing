@@ -849,7 +849,7 @@ async function downloadSchouwHtml() {
 function schWordHtml(sch, fotoNamen) {
   // Bewust eenvoudige, Word-vriendelijke opmaak (inline stijlen, geen grid).
   const st = SCH_STATUS[sch.status] || SCH_STATUS.lopend;
-  const h2 = 'font-family:Calibri,Arial,sans-serif;font-size:15pt;color:#1e3a8a;border-bottom:1px solid #c7d2fe;padding-bottom:4px;margin:24pt 0 8pt';
+  const h2 = 'font-family:Calibri,Arial,sans-serif;font-size:15pt;color:#23506c;border-bottom:1px solid #b6cddd;padding-bottom:4px;margin:24pt 0 8pt';
   const p = 'font-family:Calibri,Arial,sans-serif;font-size:10.5pt;color:#1f2937;margin:0 0 8pt';
   const klein = 'font-family:Calibri,Arial,sans-serif;font-size:8.5pt;color:#64748b;margin:0 0 6pt';
   let n = 0;
@@ -874,7 +874,7 @@ function schWordHtml(sch, fotoNamen) {
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
 <style>@page{size:A4;margin:2cm} table,td{border-collapse:collapse}</style></head>
 <body>
-<h1 style="font-family:Calibri,Arial,sans-serif;font-size:20pt;color:#172554;margin:0 0 4pt">Schouwrapport — ${htmlEsc(sch.titel || sch.apd)}</h1>
+<h1 style="font-family:Calibri,Arial,sans-serif;font-size:20pt;color:#14304a;margin:0 0 4pt">Schouwrapport — ${htmlEsc(sch.titel || sch.apd)}</h1>
 <p style="${klein};font-size:10pt">${htmlEsc(sch.project)} · ${htmlEsc(sch.apd)}${sch.fase ? ' · ' + htmlEsc(schFaseLabel(sch.fase)) : ''} · ${fmtDatum(parseDatum(sch.datum))} · uitgevoerd door ${htmlEsc(sch.door || '—')} · status ${htmlEsc(st.label)}</p>
 <p style="${klein}">HVP Procesturing — Bouwteamfase Nulelie · ${(sch.delen || []).length} locaties · ${schFotoTeller(sch)} foto's</p>
 ${sch.aanleiding ? `<h2 style="${h2}">Aanleiding &amp; opdracht</h2><p style="${p}">${htmlEsc(sch.aanleiding)}</p>` : ''}
