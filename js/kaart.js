@@ -79,8 +79,8 @@
   // vierhoek (geen twee gelijk), gevuld uit een luchtfoto-achtig kleurenpalet.
   // Dat oogt als een echte satellietfoto in plaats van een herhalend patroon.
   const VELD_PALET = [
-    '#5f8f4c', '#6da35b', '#4e7c42', '#7fac5e', '#8c9c52', '#a99a4c',
-    '#b8a45a', '#8fa15f', '#547e47', '#77925a', '#a68a52', '#93a066',
+    '#5c7c4c', '#6b8a58', '#4c6a40', '#7a9464', '#899458', '#9c9264',
+    '#8f8558', '#748a5a', '#4a6640', '#6f8558', '#948360', '#5f7a52',
   ];
   function veldMozaiek(x0, y0, x1, y1, cel, seed) {
     const hash = (i, j, s) => { const v = Math.sin(i * 127.1 + j * 311.7 + s * 74.7 + seed * 5.3) * 43758.5453; return v - Math.floor(v); };
@@ -160,24 +160,20 @@
 
   function chipBreedte(tekst) { return Math.max(36, Math.round(tekst.length * 5.7) + 16); }
 
+  // Chips blijven strak blauw-wit zoals op de originele perceelkaart; de
+  // risicostatus komt terug als kleur van de rand om de schijf, niet als
+  // los stipje in de chip, zodat de chip zelf het plaatje blijft volgen.
   function markerSvg(loc, info) {
     const actief = !!info;
-    const discKleur = actief ? '#c81e6d' : '#c7ccd2';
-    const w = chipBreedte(loc.label) + (actief ? 22 : 0);
+    const discVul = actief ? '#b23269' : '#c9cdd2';
+    const discRand = actief ? (info.stats.kritiek ? RISK_KLEUR.rood : info.stats.gevaar ? RISK_KLEUR.amber : RISK_KLEUR.groen) : '#40424a';
+    const w = chipBreedte(loc.label);
     const chipX = loc.lx - w / 2, chipY = loc.ly - 9, h = 18;
-    let status = '';
-    let tekstX = loc.lx;
-    if (actief) {
-      const kleur = info.stats.kritiek ? RISK_KLEUR.rood : info.stats.gevaar ? RISK_KLEUR.amber : RISK_KLEUR.groen;
-      status = `<circle class="kx-status" cx="${chipX + 11}" cy="${loc.ly}" r="4.5" fill="${kleur}"></circle>`;
-      tekstX = loc.lx + 8;
-    }
-    return `<g class="kx-marker${actief ? '' : ' uit'}" data-loc="${loc.id}" tabindex="0" role="${actief ? 'button' : 'img'}">
+    return `<g class="kx-marker${actief ? '' : ' uit'}" data-loc="${loc.id}" tabindex="0" role="${actief ? 'button' : 'img'}" aria-label="${htmlEsc(loc.label)}${actief ? ' — klik om project te openen' : ' — nog geen planning geladen'}">
       <line class="kx-stem" x1="${loc.x}" y1="${loc.y - 2}" x2="${loc.lx}" y2="${loc.ly + 9}"></line>
-      <ellipse class="kx-disc" cx="${loc.x}" cy="${loc.y}" rx="15" ry="6.2" fill="${discKleur}"></ellipse>
+      <ellipse class="kx-disc" cx="${loc.x}" cy="${loc.y}" rx="15" ry="6.2" style="fill:${discVul};stroke:${discRand}"></ellipse>
       <rect class="kx-chip" x="${chipX}" y="${chipY}" width="${w}" height="${h}" rx="9"></rect>
-      ${status}
-      <text class="kx-chip-txt" x="${tekstX}" y="${loc.ly + 3.5}" text-anchor="middle">${htmlEsc(loc.label)}</text>
+      <text class="kx-chip-txt" x="${loc.lx}" y="${loc.ly + 3.5}" text-anchor="middle">${htmlEsc(loc.label)}</text>
     </g>`;
   }
 
@@ -191,15 +187,13 @@
       .map((m) => markerSvg(m.loc, m.info)).join('');
     return `<svg viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg" aria-label="Projectenkaart Perceel 1">
       <defs>
-        <linearGradient id="kxDiepteGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#4c7442"/><stop offset=".5" stop-color="#2e4b28"/><stop offset="1" stop-color="#182b16"/>
-        </linearGradient>
         <radialGradient id="kxLicht" cx="0.28" cy="0.16" r="1.05">
-          <stop offset="0" stop-color="#ffffff" stop-opacity=".16"/>
+          <stop offset="0" stop-color="#ffffff" stop-opacity=".14"/>
           <stop offset=".4" stop-color="#ffffff" stop-opacity="0"/>
-          <stop offset="1" stop-color="#0c1710" stop-opacity=".3"/>
+          <stop offset="1" stop-color="#0c1710" stop-opacity=".26"/>
         </radialGradient>
-        <filter id="kxWaas" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="10"/></filter>
+        <filter id="kxWaas" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="13"/></filter>
+        <filter id="kxZacht" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.6"/></filter>
         <filter id="kxKorrel" x="-5%" y="-5%" width="110%" height="110%">
           <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" result="ruis"/>
           <feColorMatrix in="ruis" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0.5 0.5 0 0"/>
@@ -207,42 +201,37 @@
         <clipPath id="kxKlem"><path d="${PAD_FRIESLAND}"/><path d="${PAD_POLDER}"/></clipPath>
       </defs>
 
-      <g filter="url(#kxWaas)" transform="translate(9,28)" opacity=".26">
-        <path d="${PAD_FRIESLAND}" fill="#0f2338"/><path d="${PAD_POLDER}" fill="#0f2338"/>
+      <g filter="url(#kxWaas)" transform="translate(11,32)" opacity=".3">
+        <path d="${PAD_FRIESLAND}" fill="#122" opacity=".55"/><path d="${PAD_POLDER}" fill="#122" opacity=".55"/>
       </g>
-      <g transform="translate(0,13)">
-        <path class="kx-land-diepte" d="${PAD_FRIESLAND}" fill="url(#kxDiepteGrad)"/><path class="kx-land-diepte" d="${PAD_POLDER}" fill="url(#kxDiepteGrad)"/>
+      <g transform="translate(0,14)">
+        <path class="kx-land-diepte" d="${PAD_FRIESLAND}"/><path class="kx-land-diepte" d="${PAD_POLDER}"/>
       </g>
-      <path class="kx-land" d="${PAD_FRIESLAND}" fill="#6a9c58"/>
-      <path class="kx-land" d="${PAD_POLDER}" fill="#6a9c58"/>
+      <path class="kx-land" d="${PAD_FRIESLAND}" fill="#5f7d50"/>
+      <path class="kx-land" d="${PAD_POLDER}" fill="#5f7d50"/>
 
       <g clip-path="url(#kxKlem)" pointer-events="none">
         ${veldMozaiek(20, 70, 670, 340, 20, 1)}
         ${veldMozaiek(160, 335, 460, 535, 18, 2)}
-        <rect x="0" y="0" width="760" height="560" fill="#1f4a24" opacity=".22"/>
-        <ellipse cx="118" cy="252" rx="22" ry="9" fill="#345831" opacity=".6"/>
-        <ellipse cx="452" cy="214" rx="17" ry="7" fill="#345831" opacity=".55"/>
-        <ellipse cx="566" cy="224" rx="19" ry="8" fill="#345831" opacity=".55"/>
-        <ellipse cx="300" cy="96" rx="14" ry="6" fill="#345831" opacity=".5"/>
-        <ellipse cx="424" cy="374" rx="20" ry="8" fill="#345831" opacity=".55"/>
-        <ellipse cx="214" cy="508" rx="15" ry="6" fill="#345831" opacity=".5"/>
-        <path d="M 180 244 C 260 220, 330 208, 428 196 C 500 188, 560 172, 622 152" fill="none" stroke="#eef0e4" stroke-width="1.6" opacity=".38"/>
-        <path d="M 296 302 C 306 276, 318 246, 330 208" fill="none" stroke="#eef0e4" stroke-width="1.3" opacity=".32"/>
-        <path d="M 300 320 C 306 336, 310 352, 308 376 C 306 398, 304 408, 306 416 C 308 442, 326 468, 356 490" fill="none" stroke="#eef0e4" stroke-width="1.6" opacity=".38"/>
-        <path d="M 306 416 C 260 420, 224 432, 196 448" fill="none" stroke="#eef0e4" stroke-width="1.1" opacity=".38"/>
-        <rect x="0" y="0" width="760" height="560" fill="#000000" filter="url(#kxKorrel)" opacity=".1"/>
+        <rect x="0" y="0" width="760" height="560" fill="#33502e" opacity=".2"/>
+        <path filter="url(#kxZacht)" d="M 264 246 C 248 240, 234 252, 238 268 C 242 284, 262 296, 288 296 C 314 296, 336 284, 334 266 C 332 250, 310 240, 292 240 C 282 240, 272 242, 264 246 Z" fill="#182c1a" opacity=".92"/>
+        <ellipse filter="url(#kxZacht)" cx="452" cy="214" rx="16" ry="7" fill="#324a2e" opacity=".6"/>
+        <ellipse filter="url(#kxZacht)" cx="566" cy="224" rx="18" ry="8" fill="#324a2e" opacity=".6"/>
+        <ellipse filter="url(#kxZacht)" cx="300" cy="96" rx="13" ry="6" fill="#324a2e" opacity=".55"/>
+        <ellipse filter="url(#kxZacht)" cx="424" cy="374" rx="19" ry="8" fill="#324a2e" opacity=".6"/>
+        <ellipse filter="url(#kxZacht)" cx="214" cy="508" rx="14" ry="6" fill="#324a2e" opacity=".55"/>
+        <ellipse filter="url(#kxZacht)" cx="118" cy="252" rx="16" ry="7" fill="#324a2e" opacity=".55"/>
+        <path d="M 180 244 C 260 220, 330 208, 428 196 C 500 188, 560 172, 622 152" fill="none" stroke="#eef0e4" stroke-width="1.3" opacity=".28"/>
+        <path d="M 296 302 C 306 276, 318 246, 330 208" fill="none" stroke="#eef0e4" stroke-width="1.1" opacity=".24"/>
+        <path d="M 300 320 C 306 336, 310 352, 308 376 C 306 398, 304 408, 306 416 C 308 442, 326 468, 356 490" fill="none" stroke="#eef0e4" stroke-width="1.3" opacity=".28"/>
+        <path d="M 306 416 C 260 420, 224 432, 196 448" fill="none" stroke="#eef0e4" stroke-width="1" opacity=".28"/>
+        <rect x="0" y="0" width="760" height="560" fill="#000000" filter="url(#kxKorrel)" opacity=".12"/>
       </g>
       <path d="${PAD_FRIESLAND}" fill="url(#kxLicht)" pointer-events="none"/>
       <path d="${PAD_POLDER}" fill="url(#kxLicht)" pointer-events="none"/>
 
-      <g pointer-events="none">
-        <path d="M 320 248 C 326 238, 348 234, 362 239 C 376 244, 380 254, 371 262 C 358 271, 331 268, 323 259 C 319 255, 318 252, 320 248 Z" fill="#4f7994" opacity=".95"/>
-        <path d="M 224 222 C 230 215, 246 214, 253 220 C 260 226, 258 234, 249 237 C 239 240, 227 236, 223 230 C 221 227, 221 225, 224 222 Z" fill="#4f7994" opacity=".92"/>
-        <path d="M 106 236 C 112 231, 126 231, 132 236 C 137 240, 134 246, 126 248 C 117 250, 107 246, 105 241 Z" fill="#4f7994" opacity=".9"/>
-      </g>
-
       <text class="kx-perceel" x="416" y="270">Perceel 1</text>
-      <text x="600" y="244" font-size="9.5" fill="#ffffff" opacity=".55" transform="rotate(-33 600 244)">impressie — geen exacte geografie</text>
+      <text x="600" y="244" font-size="9.5" fill="#ffffff" opacity=".5" transform="rotate(-33 600 244)">impressie — geen exacte geografie</text>
       ${markers}
     </svg>
     <div class="kaart-tip" id="kaartTip"></div>`;
@@ -311,7 +300,11 @@
       g.addEventListener('click', openen);
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openen(); } });
 
-      g.addEventListener('mouseenter', () => { tip.innerHTML = tipHtml(loc, info); tip.classList.add('toon'); });
+      // Labels staan dicht op elkaar; zet de gehover(st)e marker vóór de rest
+      // zodat zijn hele naamchip klikbaar blijft, ook als buren eroverheen vallen.
+      const naarVoren = () => g.parentNode.appendChild(g);
+      g.addEventListener('mouseenter', () => { naarVoren(); tip.innerHTML = tipHtml(loc, info); tip.classList.add('toon'); });
+      g.addEventListener('focus', naarVoren);
       g.addEventListener('mousemove', (e) => {
         const r = wrap.getBoundingClientRect();
         const x = Math.min(e.clientX - r.left + 16, r.width - tip.offsetWidth - 8);
