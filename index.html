@@ -16,13 +16,52 @@
   </script>
 </head>
 <body>
+  <aside class="zijbalk" id="zijbalk">
+    <div class="zb-brand">
+      <div class="logo">NL</div>
+      <div class="zb-brand-tekst">
+        <strong>NuLelie</strong>
+        <span>Procesturing</span>
+      </div>
+    </div>
+    <nav class="zb-nav">
+      <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
+      <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
+      <button class="tab" data-tab="mijn"><span class="ico">★</span>Mijn projecten</button>
+      <button class="tab" data-tab="mijntaken"><span class="ico">☑</span>Mijn taken</button>
+      <button class="tab" data-tab="werklijst"><span class="ico">☰</span>Werklijst</button>
+      <div class="zb-groep">Planning &amp; sturing</div>
+      <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
+      <button class="tab" data-tab="kritiekpad"><span class="ico">⚡</span>Kritiek pad</button>
+      <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
+      <div class="zb-groep">Registers</div>
+      <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
+      <button class="tab" data-tab="zro"><span class="ico">⚖</span>ZRO</button>
+      <button class="tab" data-tab="onderzoeken"><span class="ico">⚗</span>Onderzoeken</button>
+      <button class="tab" data-tab="schouwen"><span class="ico">⌖</span>Schouwen</button>
+      <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
+      <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
+      <button class="tab" data-tab="uitvoering"><span class="ico">⚒</span>Uitvoering</button>
+      <div class="zb-groep">Organisatie</div>
+      <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
+      <button class="tab" data-tab="toewijzen"><span class="ico">⇄</span>Toewijzen</button>
+      <button class="tab" data-tab="accounts"><span class="ico">☖</span>Accounts</button>
+      <button class="tab" data-tab="beheer"><span class="ico">⚙</span>Beheer</button>
+    </nav>
+    <div class="zb-voet">
+      <span class="partners">Heijmans · Pol en Voskuilen</span>
+      <span>Bouwteam Perceel 1</span>
+    </div>
+  </aside>
+  <div class="zb-schaduw" id="zbSchaduw"></div>
+
   <header class="topbar">
     <div class="topbar-rij">
-      <div class="brand">
-        <div class="logo">NL</div>
+      <div class="topbar-links">
+        <button type="button" id="zbToggle" class="zb-toggle" aria-label="Menu openen">☰</button>
         <div>
-          <h1>NuLelie <span>Procesturing</span></h1>
-          <p class="peil"><span class="partners">Heijmans · Pol en Voskuilen</span> · Perceel 1 · Peildatum: <strong id="peildatum"></strong></p>
+          <h1 id="topbarTitel">Perceel 1</h1>
+          <p class="peil">Peildatum: <strong id="peildatum"></strong></p>
         </div>
       </div>
       <div class="topbar-rechts">
@@ -38,27 +77,6 @@
         </div>
       </div>
     </div>
-    <nav class="tabs">
-      <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
-      <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
-      <button class="tab" data-tab="mijn"><span class="ico">★</span>Mijn projecten</button>
-      <button class="tab" data-tab="mijntaken"><span class="ico">☑</span>Mijn taken</button>
-      <button class="tab" data-tab="werklijst"><span class="ico">☰</span>Werklijst</button>
-      <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
-      <button class="tab" data-tab="kritiekpad"><span class="ico">⚡</span>Kritiek pad</button>
-      <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
-      <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
-      <button class="tab" data-tab="zro"><span class="ico">⚖</span>ZRO</button>
-      <button class="tab" data-tab="onderzoeken"><span class="ico">⚗</span>Onderzoeken</button>
-      <button class="tab" data-tab="schouwen"><span class="ico">⌖</span>Schouwen</button>
-      <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
-      <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
-      <button class="tab" data-tab="uitvoering"><span class="ico">⚒</span>Uitvoering</button>
-      <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
-      <button class="tab" data-tab="toewijzen"><span class="ico">⇄</span>Toewijzen</button>
-      <button class="tab" data-tab="accounts"><span class="ico">☖</span>Accounts</button>
-      <button class="tab" data-tab="beheer"><span class="ico">⚙</span>Beheer</button>
-    </nav>
   </header>
 
   <!-- LOGIN-SCHERM (Clerk) -->

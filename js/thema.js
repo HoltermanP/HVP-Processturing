@@ -32,3 +32,36 @@
     markeer(huidig());
   });
 })();
+
+/* Zijbalk: mobiel in-/uitklappen en de paginatitel in de topbar laten
+   meelopen met de actieve tab (ook bij programmatische tabwissels). */
+(function () {
+  document.addEventListener('DOMContentLoaded', () => {
+    const zijbalk = document.getElementById('zijbalk');
+    const schaduw = document.getElementById('zbSchaduw');
+    const toggle = document.getElementById('zbToggle');
+    const titel = document.getElementById('topbarTitel');
+    if (!zijbalk) return;
+
+    const sluit = () => { zijbalk.classList.remove('open'); schaduw.classList.remove('toon'); };
+    if (toggle) toggle.addEventListener('click', () => {
+      zijbalk.classList.toggle('open');
+      schaduw.classList.toggle('toon', zijbalk.classList.contains('open'));
+    });
+    if (schaduw) schaduw.addEventListener('click', sluit);
+
+    const tabs = [...document.querySelectorAll('.zb-nav .tab')];
+    const tabLabel = (t) => [...t.childNodes]
+      .filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join('').trim();
+    const titelSync = () => {
+      const actief = document.querySelector('.tab.actief');
+      if (actief && titel) titel.textContent = tabLabel(actief) || 'Perceel 1';
+    };
+    const mo = new MutationObserver(titelSync);
+    tabs.forEach((t) => {
+      mo.observe(t, { attributes: true, attributeFilter: ['class'] });
+      t.addEventListener('click', sluit);
+    });
+    titelSync();
+  });
+})();
