@@ -1131,10 +1131,9 @@ select.tsb-inp{text-align:left;width:auto}
 .kaart-wrap{
   position:relative;border-radius:12px;overflow:hidden;
   background:
-    radial-gradient(620px 420px at 10% 68%, #a9d3ea 0%, rgba(169,211,234,0) 62%),
-    radial-gradient(520px 320px at 28% 100%, #b6daee 0%, rgba(182,218,238,0) 58%),
-    radial-gradient(900px 420px at 88% 6%, #e0eedd 0%, transparent 60%),
-    linear-gradient(155deg,#f1f6f2 0%,#e3eef4 55%,#d8e9f2 100%);
+    radial-gradient(480px 300px at 6% 78%, #bcdcee 0%, rgba(188,220,238,0) 65%),
+    radial-gradient(360px 220px at 22% 100%, #cbe6f3 0%, rgba(203,230,243,0) 60%),
+    #fbfcfd;
   border:1px solid var(--line);
 }
 .kaart-wrap svg{display:block;width:100%;height:auto}

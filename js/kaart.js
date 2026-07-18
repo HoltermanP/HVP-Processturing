@@ -75,6 +75,32 @@
   const PAD_FRIESLAND = ruw(VLAK_FRIESLAND, 17, 3);
   const PAD_POLDER = ruw(VLAK_POLDER, 20, 1.2);   // polderdijken zijn strak
 
+  // Onregelmatig akkermozaïek: een jittered grid geeft per cel een grillige
+  // vierhoek (geen twee gelijk), gevuld uit een luchtfoto-achtig kleurenpalet.
+  // Dat oogt als een echte satellietfoto in plaats van een herhalend patroon.
+  const VELD_PALET = [
+    '#5f8f4c', '#6da35b', '#4e7c42', '#7fac5e', '#8c9c52', '#a99a4c',
+    '#b8a45a', '#8fa15f', '#547e47', '#77925a', '#a68a52', '#93a066',
+  ];
+  function veldMozaiek(x0, y0, x1, y1, cel, seed) {
+    const hash = (i, j, s) => { const v = Math.sin(i * 127.1 + j * 311.7 + s * 74.7 + seed * 5.3) * 43758.5453; return v - Math.floor(v); };
+    const cols = Math.ceil((x1 - x0) / cel), rows = Math.ceil((y1 - y0) / cel);
+    const punt = (ix, iy) => [
+      x0 + ix * cel + (hash(ix, iy, 1) - 0.5) * cel * 0.65,
+      y0 + iy * cel + (hash(ix, iy, 2) - 0.5) * cel * 0.65,
+    ];
+    let out = '';
+    for (let ix = 0; ix < cols; ix++) {
+      for (let iy = 0; iy < rows; iy++) {
+        const p1 = punt(ix, iy), p2 = punt(ix + 1, iy), p3 = punt(ix + 1, iy + 1), p4 = punt(ix, iy + 1);
+        const kleur = VELD_PALET[Math.floor(hash(ix, iy, 3) * VELD_PALET.length)];
+        const pts = [p1, p2, p3, p4].map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+        out += `<polygon points="${pts}" fill="${kleur}" stroke="#3e5f35" stroke-width=".4" stroke-opacity=".22"/>`;
+      }
+    }
+    return out;
+  }
+
   /* ------------------------- Koppeling met de planning ------------------- */
 
   function normeer(s) {
@@ -136,7 +162,7 @@
 
   function markerSvg(loc, info) {
     const actief = !!info;
-    const discKleur = actief ? '#2f6b8f' : '#b9bec6';
+    const discKleur = actief ? '#c81e6d' : '#c7ccd2';
     const w = chipBreedte(loc.label) + (actief ? 22 : 0);
     const chipX = loc.lx - w / 2, chipY = loc.ly - 9, h = 18;
     let status = '';
@@ -165,68 +191,49 @@
       .map((m) => markerSvg(m.loc, m.info)).join('');
     return `<svg viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg" aria-label="Projectenkaart Perceel 1">
       <defs>
-        <pattern id="kxVeldF" width="46" height="34" patternUnits="userSpaceOnUse" patternTransform="rotate(12)">
-          <rect width="46" height="34" fill="#5f9150"/>
-          <rect x="0" y="0" width="19" height="11" fill="#6da35b" opacity=".35"/>
-          <rect x="19" y="0" width="15" height="11" fill="#4e7c42" opacity=".3"/>
-          <rect x="34" y="0" width="12" height="11" fill="#79ad64" opacity=".3"/>
-          <rect x="0" y="11" width="13" height="12" fill="#4e7c42" opacity=".28"/>
-          <rect x="13" y="11" width="18" height="12" fill="#6da35b" opacity=".25"/>
-          <rect x="31" y="11" width="15" height="12" fill="#8fa763" opacity=".28"/>
-          <rect x="0" y="23" width="22" height="11" fill="#71a15c" opacity=".28"/>
-          <rect x="22" y="23" width="13" height="11" fill="#547e47" opacity=".3"/>
-          <rect x="35" y="23" width="11" height="11" fill="#6da35b" opacity=".25"/>
-          <path d="M0 11h46M0 23h46M19 0v11M34 0v11M13 11v12M31 11v12M22 23v11M35 23v11" stroke="#47703c" stroke-width=".6" opacity=".25"/>
-        </pattern>
-        <pattern id="kxVeldP" width="54" height="30" patternUnits="userSpaceOnUse" patternTransform="rotate(-3)">
-          <rect width="54" height="30" fill="#679c53"/>
-          <rect x="0" width="9" height="30" fill="#74ac5e" opacity=".3"/>
-          <rect x="18" width="9" height="30" fill="#7fb267" opacity=".28"/>
-          <rect x="27" width="9" height="30" fill="#549043" opacity=".3"/>
-          <rect x="36" width="9" height="30" fill="#a3ab6a" opacity=".25"/>
-          <path d="M9 0v30M18 0v30M27 0v30M36 0v30M45 0v30M0 15h54" stroke="#4a773e" stroke-width=".6" opacity=".25"/>
-        </pattern>
-        <radialGradient id="kxLicht" cx="0.32" cy="0.2" r="1.05">
-          <stop offset="0" stop-color="#ffffff" stop-opacity=".2"/>
+        <radialGradient id="kxLicht" cx="0.3" cy="0.18" r="1.05">
+          <stop offset="0" stop-color="#ffffff" stop-opacity=".22"/>
           <stop offset=".45" stop-color="#ffffff" stop-opacity="0"/>
-          <stop offset="1" stop-color="#122015" stop-opacity=".24"/>
+          <stop offset="1" stop-color="#122015" stop-opacity=".22"/>
         </radialGradient>
-        <filter id="kxWaas" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"/></filter>
+        <filter id="kxWaas" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"/></filter>
         <clipPath id="kxKlem"><path d="${PAD_FRIESLAND}"/><path d="${PAD_POLDER}"/></clipPath>
       </defs>
 
-      <g filter="url(#kxWaas)" transform="translate(10,24)" opacity=".28">
-        <path d="${PAD_FRIESLAND}" fill="#1d3550"/><path d="${PAD_POLDER}" fill="#1d3550"/>
+      <g filter="url(#kxWaas)" transform="translate(8,26)" opacity=".24">
+        <path d="${PAD_FRIESLAND}" fill="#0f2338"/><path d="${PAD_POLDER}" fill="#0f2338"/>
       </g>
-      <g transform="translate(0,9)">
+      <g transform="translate(0,8)">
         <path class="kx-land-diepte" d="${PAD_FRIESLAND}"/><path class="kx-land-diepte" d="${PAD_POLDER}"/>
       </g>
-      <path class="kx-land" d="${PAD_FRIESLAND}" fill="url(#kxVeldF)"/>
-      <path class="kx-land" d="${PAD_POLDER}" fill="url(#kxVeldP)"/>
+      <path class="kx-land" d="${PAD_FRIESLAND}" fill="#6a9c58"/>
+      <path class="kx-land" d="${PAD_POLDER}" fill="#6a9c58"/>
 
       <g clip-path="url(#kxKlem)" pointer-events="none">
-        <ellipse cx="118" cy="252" rx="20" ry="8" fill="#41663a" opacity=".35"/>
-        <ellipse cx="452" cy="214" rx="16" ry="7" fill="#41663a" opacity=".3"/>
-        <ellipse cx="566" cy="224" rx="18" ry="7" fill="#41663a" opacity=".3"/>
-        <ellipse cx="300" cy="96" rx="14" ry="6" fill="#41663a" opacity=".28"/>
-        <ellipse cx="424" cy="374" rx="20" ry="8" fill="#41663a" opacity=".35"/>
-        <ellipse cx="214" cy="508" rx="15" ry="6" fill="#41663a" opacity=".28"/>
-        <path d="M 180 244 C 260 220, 330 208, 428 196 C 500 188, 560 172, 622 152" fill="none" stroke="#ffffff" stroke-width="1.4" opacity=".28"/>
-        <path d="M 296 302 C 306 276, 318 246, 330 208" fill="none" stroke="#ffffff" stroke-width="1.2" opacity=".25"/>
-        <path d="M 300 320 C 306 336, 310 352, 308 376 C 306 398, 304 408, 306 416 C 308 442, 326 468, 356 490" fill="none" stroke="#ffffff" stroke-width="1.4" opacity=".28"/>
-        <path d="M 306 416 C 260 420, 224 432, 196 448" fill="none" stroke="#ffffff" stroke-width="1" opacity=".35"/>
+        ${veldMozaiek(20, 70, 670, 340, 20, 1)}
+        ${veldMozaiek(160, 335, 460, 535, 18, 2)}
+        <ellipse cx="118" cy="252" rx="22" ry="9" fill="#3a5c33" opacity=".55"/>
+        <ellipse cx="452" cy="214" rx="17" ry="7" fill="#3a5c33" opacity=".5"/>
+        <ellipse cx="566" cy="224" rx="19" ry="8" fill="#3a5c33" opacity=".5"/>
+        <ellipse cx="300" cy="96" rx="14" ry="6" fill="#3a5c33" opacity=".45"/>
+        <ellipse cx="424" cy="374" rx="20" ry="8" fill="#3a5c33" opacity=".5"/>
+        <ellipse cx="214" cy="508" rx="15" ry="6" fill="#3a5c33" opacity=".45"/>
+        <path d="M 180 244 C 260 220, 330 208, 428 196 C 500 188, 560 172, 622 152" fill="none" stroke="#f4f1e6" stroke-width="1.6" opacity=".4"/>
+        <path d="M 296 302 C 306 276, 318 246, 330 208" fill="none" stroke="#f4f1e6" stroke-width="1.3" opacity=".35"/>
+        <path d="M 300 320 C 306 336, 310 352, 308 376 C 306 398, 304 408, 306 416 C 308 442, 326 468, 356 490" fill="none" stroke="#f4f1e6" stroke-width="1.6" opacity=".4"/>
+        <path d="M 306 416 C 260 420, 224 432, 196 448" fill="none" stroke="#f4f1e6" stroke-width="1.1" opacity=".4"/>
       </g>
       <path d="${PAD_FRIESLAND}" fill="url(#kxLicht)" pointer-events="none"/>
       <path d="${PAD_POLDER}" fill="url(#kxLicht)" pointer-events="none"/>
 
       <g pointer-events="none">
-        <path d="M 320 248 C 326 238, 348 234, 362 239 C 376 244, 380 254, 371 262 C 358 271, 331 268, 323 259 C 319 255, 318 252, 320 248 Z" fill="#527a92" opacity=".95"/>
-        <path d="M 224 222 C 230 215, 246 214, 253 220 C 260 226, 258 234, 249 237 C 239 240, 227 236, 223 230 C 221 227, 221 225, 224 222 Z" fill="#527a92" opacity=".92"/>
-        <path d="M 106 236 C 112 231, 126 231, 132 236 C 137 240, 134 246, 126 248 C 117 250, 107 246, 105 241 Z" fill="#527a92" opacity=".9"/>
+        <path d="M 320 248 C 326 238, 348 234, 362 239 C 376 244, 380 254, 371 262 C 358 271, 331 268, 323 259 C 319 255, 318 252, 320 248 Z" fill="#4f7994" opacity=".95"/>
+        <path d="M 224 222 C 230 215, 246 214, 253 220 C 260 226, 258 234, 249 237 C 239 240, 227 236, 223 230 C 221 227, 221 225, 224 222 Z" fill="#4f7994" opacity=".92"/>
+        <path d="M 106 236 C 112 231, 126 231, 132 236 C 137 240, 134 246, 126 248 C 117 250, 107 246, 105 241 Z" fill="#4f7994" opacity=".9"/>
       </g>
 
       <text class="kx-perceel" x="416" y="270">Perceel 1</text>
-      <text x="600" y="244" font-size="9.5" fill="#ffffff" opacity=".6" transform="rotate(-33 600 244)">impressie — geen exacte geografie</text>
+      <text x="600" y="244" font-size="9.5" fill="#ffffff" opacity=".55" transform="rotate(-33 600 244)">impressie — geen exacte geografie</text>
       ${markers}
     </svg>
     <div class="kaart-tip" id="kaartTip"></div>`;
@@ -276,8 +283,8 @@
 
     const aantalActief = Object.keys(perLoc).length;
     el('#kaartLegenda').innerHTML = `
-      <span class="leg"><i class="rond" style="background:#2f6b8f"></i>In de planning — klik om te openen (${aantalActief})</span>
-      <span class="leg"><i class="rond" style="background:#b9bec6"></i>Nog geen planning geladen</span>
+      <span class="leg"><i class="rond" style="background:#c81e6d"></i>In de planning — klik om te openen (${aantalActief})</span>
+      <span class="leg"><i class="rond" style="background:#c7ccd2"></i>Nog geen planning geladen</span>
       <span class="leg"><i class="ring" style="background:${RISK_KLEUR.groen}"></i>op koers</span>
       <span class="leg"><i class="ring" style="background:${RISK_KLEUR.amber}"></i>risico</span>
       <span class="leg"><i class="ring" style="background:${RISK_KLEUR.rood}"></i>kritiek</span>`;
