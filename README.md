@@ -1,6 +1,6 @@
-# HVP Procesturing — Bouwteamfase Nulelie
+# NuLelie Procesturing — bouwteam Heijmans · Pol en Voskuilen
 
-Webapplicatie om het bouwteamproces van Nulelie te **besturen**: de fasen en
+Webapplicatie om het bouwteamproces van NuLelie (Perceel 1) te **besturen**: de fasen en
 activiteiten uit het procesdocument, gekoppeld aan de planning (werkpakketten en
 mijlpalen) uit het engineeringsdashboard. Met een takenvooruitblik op basis van
 doorlooptijden, een uitgebreid KPI-dashboard en AI-gegenereerde maand- en
@@ -15,7 +15,13 @@ projecten → APD's binnen een project → werkpakketten binnen een APD.
 ## Wat het doet
 
 - **Overzicht** — hiërarchische browser (Project ▸ APD ▸ Werkpakket) met KPI's en
-  faseverdeling per niveau, en een activiteiten-checklist per werkpakket.
+  faseverdeling per niveau, en een activiteiten-checklist per werkpakket. Bovenaan
+  staat de **projectenkaart van Perceel 1** (`js/kaart.js`): een gestileerde kaart
+  van Zuid-Friesland en de Noordoostpolder met alle projectgebieden als marker.
+  Projecten die in de planning staan zijn magenta en klikbaar (één klik opent het
+  project), met een statusstip (op koers / risico / kritiek) en een tooltip met
+  kengetallen; gebieden zonder geladen planning staan er grijs op. De koppeling
+  tussen kaartlocatie en projectnaam is tolerant voor kleine spellingsverschillen.
 - **Planning** — een hiërarchische tijdlijn (Gantt) per **project ▸ APD ▸
   werkpakket** met gekleurde fasen, mijlpaalmarkers (◆) en een "vandaag"-lijn op
   de peildatum. Per APD staat de gereedmelding per fase: een APD is pas

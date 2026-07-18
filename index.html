@@ -3,50 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HVP Procesturing — Bouwteamfase Nulelie</title>
+  <title>NuLelie Procesturing — Heijmans · Pol en Voskuilen</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <div class="logo">HVP</div>
-      <div>
-        <h1>Procesturing — Bouwteamfase <span>Nulelie</span></h1>
-        <p class="peil">Peildatum: <strong id="peildatum"></strong></p>
+    <div class="topbar-rij">
+      <div class="brand">
+        <div class="logo">NL</div>
+        <div>
+          <h1>NuLelie <span>Procesturing</span></h1>
+          <p class="peil"><span class="partners">Heijmans · Pol en Voskuilen</span> · Perceel 1 · Peildatum: <strong id="peildatum"></strong></p>
+        </div>
+      </div>
+      <div class="topbar-rechts">
+        <div id="dbStatus" class="db-status offline" title="Verbindingsstatus database"><span class="stip"></span><span id="dbStatusTekst">Lokaal</span></div>
+        <div id="authUser" class="auth-user">
+          <span id="rolBadge" class="rol-badge"></span>
+          <div id="clerkUserButton"></div>
+        </div>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      <div id="dbStatus" class="db-status offline" title="Verbindingsstatus database"><span class="stip"></span><span id="dbStatusTekst">Lokaal</span></div>
-      <nav class="tabs">
-        <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
-        <button class="tab" data-tab="mijn"><span class="ico">★</span>Mijn projecten</button>
-        <button class="tab" data-tab="mijntaken"><span class="ico">☑</span>Mijn taken</button>
-        <button class="tab" data-tab="werklijst"><span class="ico">☰</span>Werklijst</button>
-        <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
-        <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
-        <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
-        <button class="tab" data-tab="zro"><span class="ico">⚖</span>ZRO</button>
-        <button class="tab" data-tab="onderzoeken"><span class="ico">⚗</span>Onderzoeken</button>
-        <button class="tab" data-tab="schouwen"><span class="ico">⌖</span>Schouwen</button>
-        <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
-        <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
-        <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
-        <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
-        <button class="tab" data-tab="toewijzen"><span class="ico">⇄</span>Toewijzen</button>
-        <button class="tab" data-tab="accounts"><span class="ico">☖</span>Accounts</button>
-        <button class="tab" data-tab="beheer"><span class="ico">⚙</span>Beheer</button>
-      </nav>
-      <div id="authUser" class="auth-user">
-        <span id="rolBadge" class="rol-badge"></span>
-        <div id="clerkUserButton"></div>
-      </div>
-    </div>
+    <nav class="tabs">
+      <button class="tab actief" data-tab="overzicht"><span class="ico">▦</span>Overzicht</button>
+      <button class="tab" data-tab="mijn"><span class="ico">★</span>Mijn projecten</button>
+      <button class="tab" data-tab="mijntaken"><span class="ico">☑</span>Mijn taken</button>
+      <button class="tab" data-tab="werklijst"><span class="ico">☰</span>Werklijst</button>
+      <button class="tab" data-tab="planning"><span class="ico">▤</span>Planning</button>
+      <button class="tab" data-tab="kritiekpad"><span class="ico">⚡</span>Kritiek pad</button>
+      <button class="tab" data-tab="taken"><span class="ico">✓</span>Taken</button>
+      <button class="tab" data-tab="vergunningen"><span class="ico">⎙</span>Vergunningen</button>
+      <button class="tab" data-tab="zro"><span class="ico">⚖</span>ZRO</button>
+      <button class="tab" data-tab="onderzoeken"><span class="ico">⚗</span>Onderzoeken</button>
+      <button class="tab" data-tab="schouwen"><span class="ico">⌖</span>Schouwen</button>
+      <button class="tab" data-tab="tsb"><span class="ico">€</span>TSB</button>
+      <button class="tab" data-tab="wijzigingen"><span class="ico">✎</span>Wijzigingen</button>
+      <button class="tab" data-tab="uitvoering"><span class="ico">⚒</span>Uitvoering</button>
+      <button class="tab" data-tab="dashboard"><span class="ico">◷</span>Dashboard</button>
+      <button class="tab" data-tab="rapporten"><span class="ico">✦</span>Rapporten</button>
+      <button class="tab" data-tab="toewijzen"><span class="ico">⇄</span>Toewijzen</button>
+      <button class="tab" data-tab="accounts"><span class="ico">☖</span>Accounts</button>
+      <button class="tab" data-tab="beheer"><span class="ico">⚙</span>Beheer</button>
+    </nav>
   </header>
 
   <!-- LOGIN-SCHERM (Clerk) -->
   <div id="loginScherm">
     <div class="login-kaart">
-      <div class="login-brand"><div class="logo">HVP</div><div><h1>Procesturing — Bouwteamfase Nulelie</h1><p>Log in om verder te gaan</p></div></div>
+      <div class="login-brand"><div class="logo">NL</div><div><h1>NuLelie Procesturing</h1><p>Bouwteam Heijmans · Pol en Voskuilen — log in om verder te gaan</p></div></div>
       <div id="clerkSignIn"></div>
     </div>
   </div>
@@ -68,6 +72,15 @@
     <section id="view-overzicht" class="view actief">
       <div id="kruimels" class="kruimels"></div>
       <div id="kpis" class="kpis"></div>
+
+      <div class="card kaart-card" id="kaartKaart">
+        <div class="card-kop">
+          <h2>Projectenkaart — Perceel 1</h2>
+          <span class="hint">Klik op een projectmarker om het project te openen · gestileerde weergave van het perceel</span>
+        </div>
+        <div id="kaartWrap" class="kaart-wrap"></div>
+        <div id="kaartLegenda" class="legenda kaart-legenda"></div>
+      </div>
 
       <div class="card">
         <div class="card-kop"><h2 id="faseTitel">Faseverdeling</h2><span class="hint">Verdeling van werkpakketten over de bouwteamfasen op de peildatum</span></div>
@@ -123,6 +136,18 @@
           <div id="ganttBody" class="gantt-body"></div>
         </div>
       </div>
+    </section>
+
+    <!-- ================= KRITIEK PAD ================= -->
+    <section id="view-kritiekpad" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Kritieke pad bewaking</h2>
+          <p>Per werkpakket wordt het resterende werk vanaf de peildatum doorgerekend en afgezet tegen elke komende mijlpaal — inclusief de doorwerking naar werkvoorbereiding, uitvoering en de datum klantwens. Binnen een fase rekent de projectie met het <strong>plantempo</strong> (werk dat volgens plan parallel loopt, minimaal de langste openstaande stap); fasen schakelen in serie, dus opgelopen vertraging telt door. De mijlpaal met de <strong>minste speling</strong> is het bindende punt: dát is het kritieke pad. <span style="color:var(--rood);font-weight:600">Rood</span> = wordt te laat zonder ingrijpen, <span style="color:var(--amber);font-weight:600">amber</span> = minder dan een week speling. Klik op een werkpakket voor de mijlpaalbewaking en de opbouw van het pad; filter met de balk bovenaan.</p>
+        </div>
+      </div>
+      <div class="card"><div id="kpKpis" class="taken-stats"></div></div>
+      <div id="kpInhoud"></div>
     </section>
 
     <!-- ================= TAKEN ================= -->
@@ -248,105 +273,150 @@
       </div>
     </section>
 
+    <!-- ================= UITVOERING (voortgang realisatie) ================= -->
+    <section id="view-uitvoering" class="view">
+      <div class="section-kop">
+        <div>
+          <h2>Uitvoering — voortgangsregistratie</h2>
+          <p>Registreer eenvoudig de gerealiseerde meters en boringen per werkpakket, per week of per maand. De registraties worden afgezet tegen de geplande meters (uit de planning) en de geplande boringen (per werkpakket vast te leggen via “plan”), zodat je per project en per periode het werkelijk gerealiseerde percentage in uitvoering ziet.</p>
+        </div>
+        <button class="primair" id="uvToevoegen"><span class="ico">＋</span> Registratie</button>
+      </div>
+      <div class="card"><div id="uvKpis" class="taken-stats"></div></div>
+      <div id="uvInhoud"></div>
+    </section>
+
     <!-- ================= DASHBOARD / RAPPORTAGE ================= -->
     <section id="view-dashboard" class="view">
       <div class="section-kop">
         <div>
           <h2>Stuur- &amp; KPI-dashboard</h2>
-          <p>Zinvolle stuurinformatie over het hele portfolio of per project — voortgang, risico's, bezetting en naderende mijlpalen.</p>
+          <p>De kern-KPI's van het portfolio of één project in één oogopslag — klik op een KPI of tegel voor de details.</p>
         </div>
         <div class="seg-control" id="dashScope"></div>
       </div>
 
-      <div id="dashKpis" class="kpis"></div>
-
-      <div class="card" id="dashTsbKaart" style="display:none">
-        <div class="card-kop"><h2>TSB — begroot vs. besteed</h2><span class="hint">gewerkte uren × tarief + overige kosten, uit de TSB-module · klik voor detail</span></div>
-        <div id="dashTsb"></div>
+      <!-- NIVEAU 1 — visueel overzicht, geen details -->
+      <div id="dashOverzicht">
+        <div class="card dash-hero" id="dashHero"></div>
+        <div id="dashKpis" class="kpis"></div>
+        <div id="dashTegels" class="dash-tegels"></div>
       </div>
 
-      <div class="grid-2" id="dashTsbExtra" style="display:none">
-        <div class="card">
-          <div class="card-kop"><h2>Kosten per km tracé</h2><span class="hint">TSB-budget en besteding per kilometer nieuw tracé uit de planning — benchmark tussen projecten</span></div>
-          <div id="dashTsbKm"></div>
+      <!-- NIVEAU 2 — detailpanelen, zichtbaar na doorklikken -->
+      <div id="dashDetail" style="display:none">
+        <div class="dash-detail-kop">
+          <button id="dashTerug" class="terug-knop" title="Terug naar het dashboard">← Dashboard</button>
+          <h2 id="dashDetailTitel"></h2>
         </div>
-        <div class="card">
-          <div class="card-kop"><h2>Fasebewaking budget</h2><span class="hint">besteding afgezet tegen het TSB-budget t/m de fase waarin het project zit</span></div>
-          <div id="dashTsbFase"></div>
-        </div>
-      </div>
 
-      <div class="card" id="dashWzKaart" style="display:none">
-        <div class="card-kop"><h2>Wijzigingen &amp; VTW's</h2><span class="hint">aantal en kosten binnen de gekozen scope · klik voor het register</span></div>
-        <div id="dashWz" class="taken-stats"></div>
-      </div>
-
-      <div class="card" id="dashOzKaart" style="display:none">
-        <div class="card-kop"><h2>Conditionerende onderzoeken</h2><span class="hint">stand van bureau-onderzoeken binnen de gekozen scope · klik voor het register</span></div>
-        <div id="dashOz" class="taken-stats"></div>
-      </div>
-
-      <div class="card" id="dashTolgatesKaart">
-        <div class="card-kop"><h2>Tolgates</h2><span class="hint">faseovergangen T1–T4 per project · ◇ gepland vs. ◆ gerealiseerd · klik op een gate om vast te leggen</span></div>
-        <div id="dashTolgates"></div>
-      </div>
-
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-kop"><h2>Voortgangstrend</h2><span class="hint">o.b.v. vastgelegde momentopnames</span></div>
-          <div id="dashTrend"></div>
-        </div>
-        <div class="card">
-          <div class="card-kop"><h2>Mijlpalen per week</h2><span class="hint">komende 90 dagen · gekleurd per fase</span></div>
-          <div id="dashTijdlijn"></div>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-kop"><h2>Statusverdeling activiteiten</h2></div>
-          <div class="donut-wrap">
-            <div id="rapStatusDonut" class="donut"><div id="rapStatusKern" class="donut-kern"></div></div>
-            <div id="rapStatusLegenda" class="legenda kolom"></div>
+        <div class="dash-sectie" data-sectie="voortgang">
+          <div class="card">
+            <div class="card-kop"><h2>Voortgangstrend</h2><span class="hint">o.b.v. vastgelegde momentopnames</span></div>
+            <div id="dashTrend"></div>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-kop"><h2>Voortgang per project</h2></div>
+              <div id="rapProjecten" class="rp-lijst"></div>
+            </div>
+            <div class="card">
+              <div class="card-kop"><h2>Voortgang per APD</h2></div>
+              <div id="dashApd" class="rp-lijst"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-kop"><h2>Bezetting per engineer</h2><span class="hint">Werkpakketten &amp; lopende activiteiten</span></div>
+            <div id="dashEngineers" class="minibars"></div>
           </div>
         </div>
-        <div class="card">
-          <div class="card-kop"><h2>Faseverdeling</h2></div>
-          <div id="dashFaseBalk" class="fasebalk"></div>
-          <div id="dashFaseLegenda" class="legenda" style="margin-top:14px"></div>
-          <div class="risk-tiles" id="dashRisk" style="margin-top:18px"></div>
-        </div>
-      </div>
 
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-kop"><h2 id="rapKomendTitel">Naderende mijlpalen</h2></div>
-          <ul id="rapKomend" class="deadline-lijst"></ul>
+        <div class="dash-sectie" data-sectie="status">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-kop"><h2>Statusverdeling activiteiten</h2></div>
+              <div class="donut-wrap">
+                <div id="rapStatusDonut" class="donut"><div id="rapStatusKern" class="donut-kern"></div></div>
+                <div id="rapStatusLegenda" class="legenda kolom"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-kop"><h2>Faseverdeling</h2></div>
+              <div id="dashFaseBalk" class="fasebalk"></div>
+              <div id="dashFaseLegenda" class="legenda" style="margin-top:14px"></div>
+              <div class="risk-tiles" id="dashRisk" style="margin-top:18px"></div>
+            </div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-kop"><h2>Voortgang per project</h2></div>
-          <div id="rapProjecten" class="rp-lijst"></div>
+
+        <div class="dash-sectie" data-sectie="mijlpalen">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-kop"><h2 id="rapKomendTitel">Naderende mijlpalen</h2></div>
+              <ul id="rapKomend" class="deadline-lijst"></ul>
+            </div>
+            <div class="card">
+              <div class="card-kop"><h2>Mijlpalen per week</h2><span class="hint">komende 90 dagen · gekleurd per fase</span></div>
+              <div id="dashTijdlijn"></div>
+            </div>
+          </div>
+          <div class="card" id="dashTolgatesKaart">
+            <div class="card-kop"><h2>Tolgates</h2><span class="hint">faseovergangen T1–T4 per project · ◇ gepland vs. ◆ gerealiseerd · klik op een gate om vast te leggen</span></div>
+            <div id="dashTolgates"></div>
+          </div>
         </div>
-      </div>
 
-      <div class="card">
-        <div class="card-kop"><h2 id="rapKritiekTitel">Kritiek &amp; aandacht</h2><span class="hint">Achterstand, naderende deadlines, geblokkeerd of krappe doorlooptijden</span></div>
-        <ul id="rapKritiek" class="kritiek-lijst"></ul>
-      </div>
-
-      <div class="card">
-        <div class="card-kop"><h2 id="dashRadarTitel">Risico-radar</h2><span class="hint">Acties op activiteit-niveau · komende 90 dagen</span></div>
-        <div id="dashRadar" class="rapport-radar-wrap"></div>
-      </div>
-
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-kop"><h2>Bezetting per engineer</h2><span class="hint">Werkpakketten &amp; lopende activiteiten</span></div>
-          <div id="dashEngineers" class="minibars"></div>
+        <div class="dash-sectie" data-sectie="kritiekpad">
+          <div class="card" id="dashKpKaart">
+            <div class="card-kop"><h2 id="dashKpTitel">Kritieke pad bewaking</h2><span class="hint">bindende mijlpaal met de minste speling per werkpakket · klik voor het werkpakket</span></div>
+            <div id="dashKp"></div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-kop"><h2>Voortgang per APD</h2></div>
-          <div id="dashApd" class="rp-lijst"></div>
+
+        <div class="dash-sectie" data-sectie="risico">
+          <div class="card">
+            <div class="card-kop"><h2 id="rapKritiekTitel">Kritiek &amp; aandacht</h2><span class="hint">Achterstand, naderende deadlines, geblokkeerd of krappe doorlooptijden</span></div>
+            <ul id="rapKritiek" class="kritiek-lijst"></ul>
+          </div>
+          <div class="card">
+            <div class="card-kop"><h2 id="dashRadarTitel">Risico-radar</h2><span class="hint">Acties op activiteit-niveau · komende 90 dagen</span></div>
+            <div id="dashRadar" class="rapport-radar-wrap"></div>
+          </div>
+        </div>
+
+        <div class="dash-sectie" data-sectie="budget">
+          <div class="card" id="dashTsbKaart" style="display:none">
+            <div class="card-kop"><h2>TSB — begroot vs. besteed</h2><span class="hint">gewerkte uren × tarief + overige kosten, uit de TSB-module · klik voor detail</span></div>
+            <div id="dashTsb"></div>
+          </div>
+          <div class="grid-2" id="dashTsbExtra" style="display:none">
+            <div class="card">
+              <div class="card-kop"><h2>Kosten per km tracé</h2><span class="hint">TSB-budget en besteding per kilometer nieuw tracé uit de planning — benchmark tussen projecten</span></div>
+              <div id="dashTsbKm"></div>
+            </div>
+            <div class="card">
+              <div class="card-kop"><h2>Fasebewaking budget</h2><span class="hint">besteding afgezet tegen het TSB-budget t/m de fase waarin het project zit</span></div>
+              <div id="dashTsbFase"></div>
+            </div>
+          </div>
+          <div class="card" id="dashWzKaart" style="display:none">
+            <div class="card-kop"><h2>Wijzigingen &amp; VTW's</h2><span class="hint">aantal en kosten binnen de gekozen scope · klik voor het register</span></div>
+            <div id="dashWz" class="taken-stats"></div>
+          </div>
+        </div>
+
+        <div class="dash-sectie" data-sectie="onderzoeken">
+          <div class="card" id="dashOzKaart" style="display:none">
+            <div class="card-kop"><h2>Conditionerende onderzoeken</h2><span class="hint">stand van bureau-onderzoeken binnen de gekozen scope · klik voor het register</span></div>
+            <div id="dashOz" class="taken-stats"></div>
+          </div>
+        </div>
+
+        <div class="dash-sectie" data-sectie="uitvoering">
+          <div class="card" id="dashUvKaart" style="display:none">
+            <div class="card-kop"><h2>Uitvoering — gerealiseerd vs. gepland</h2><span class="hint">meters en boringen uit de voortgangsregistratie · klik voor de rapportage</span></div>
+            <div id="dashUv" class="taken-stats"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -545,14 +615,17 @@
   <script src="js/seed.js"></script>
   <script src="js/db.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/kaart.js"></script>
   <script src="js/registers.js"></script>
   <script src="js/zro.js"></script>
   <script src="js/onderzoeken.js"></script>
   <script src="js/werklijst.js"></script>
+  <script src="js/kritiekpad.js"></script>
   <script src="js/tsb.js"></script>
   <script src="js/tolgates.js"></script>
   <script src="js/wijzigingen.js"></script>
   <script src="js/schouw.js"></script>
+  <script src="js/voortgang.js"></script>
   <script src="js/documentformats.js"></script>
   <script src="js/rechten.js"></script>
   <script src="js/app.js"></script>

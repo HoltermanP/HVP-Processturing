@@ -51,6 +51,13 @@ function fmtDatum(d) {
   if (!d || isNaN(d)) return '—';
   return d.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' });
 }
+// Compacte datum zonder jaartal, voor labels met weinig ruimte (bv. planningmarkers).
+function fmtDatumKort(d) {
+  if (!d) return '—';
+  if (typeof d === 'string') d = parseDatum(d);
+  if (!d || isNaN(d)) return '—';
+  return d.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' });
+}
 function isoDatum(d) { return d.toISOString().slice(0, 10); }
 function dagenVerschil(a, b) { return Math.round((b - a) / 864e5); }
 
@@ -73,6 +80,8 @@ const State = {
   wijzigingen: [],
   vtws: [],
   schouwen: [],
+  realisaties: [],      // voortgangsregistraties uitvoering (meters/boringen per periode)
+  uitvoeringPlan: {},   // per wp-id: geplande boringen + eventueel afwijkende meters
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   planningOpen: {},   // opengeklapte APD's op de planningpagina (key: project||apd)
   wpOpen: {},         // opengeklapte werkpakketten (inline procesuitklap; key: wp.id) — gedeeld tussen Overzicht en Planning
@@ -84,6 +93,7 @@ const State = {
   zroFilter: 'alle',
   ozFilter: 'alle',
   ozCatFilter: '',
+  uvWeergave: 'week',
   dashScope: 'portfolio',
 
   async laad() {
@@ -107,6 +117,8 @@ const State = {
     this.wijzigingen = staat.wijzigingen || [];
     this.vtws = staat.vtws || [];
     this.schouwen = staat.schouwen || [];
+    this.realisaties = staat.realisaties || [];
+    this.uitvoeringPlan = staat.uitvoeringPlan || {};
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     // Verse start: ook de statussen uit de planning meeladen.
@@ -178,6 +190,8 @@ const State = {
       wijzigingen: this.wijzigingen,
       vtws: this.vtws,
       schouwen: this.schouwen,
+      realisaties: this.realisaties,
+      uitvoeringPlan: this.uitvoeringPlan,
     });
   },
   wpVoortgang(wpId) {
@@ -521,10 +535,12 @@ function toast(msg, type = '') {
 
 /* -------------------------------- Render --------------------------------- */
 function render() {
+  if (typeof kpReset === 'function') kpReset();   // cache kritieke-padberekening leegmaken
   vulFilters();
   renderFilterIndicator();
   renderOverzicht();
   renderPlanning();
+  if (typeof renderKritiekPad === 'function') renderKritiekPad();
   renderTaken();
   if (typeof renderWerklijst === 'function') renderWerklijst();
   renderVergunningen();
@@ -533,6 +549,7 @@ function render() {
   if (typeof renderTsb === 'function') renderTsb();
   if (typeof renderWijzigingen === 'function') renderWijzigingen();
   if (typeof renderSchouwen === 'function') renderSchouwen();
+  if (typeof renderUitvoering === 'function') renderUitvoering();
   renderDashboard();
   renderRapportenControls();
   renderActiviteiten();
@@ -551,7 +568,7 @@ function gateUI() {
     const n = el(s); if (n) n.disabled = !vol;
   });
   document.querySelectorAll('.filebtn').forEach((l) => l.classList.toggle('uit', !vol));
-  ['#vgToevoegen', '#zroToevoegen', '#ozToevoegen'].forEach((s) => { const n = el(s); if (n) n.style.display = vol ? '' : 'none'; });
+  ['#vgToevoegen', '#zroToevoegen', '#ozToevoegen', '#uvToevoegen'].forEach((s) => { const n = el(s); if (n) n.style.display = vol ? '' : 'none'; });
   const setTab = (naam, zicht) => { const t = document.querySelector(`.tab[data-tab="${naam}"]`); if (t) t.style.display = zicht ? '' : 'none'; };
   setTab('toewijzen', !window.Auth || Auth.magToewijzen());
   setTab('accounts', !window.Auth || Auth.magAccounts());
@@ -707,6 +724,8 @@ function renderOverzicht() {
     n.addEventListener('click', zet);
     n.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zet(); } });
   });
+
+  if (typeof renderKaart === 'function') renderKaart(niveau);
 
   if (niveau === 'projecten') renderProjectenGrid();
   else if (niveau === 'apds') renderApdGrid(State.filters.project);
@@ -886,9 +905,10 @@ function mijlpaalMarkers(mijlpalen, pos, prefix) {
     const meta = MIJLPALEN.find((m) => m.key === km.key);
     return { m: meta, code: km.code, d, left: pos(d), behaald: d <= VANDAAG };
   }).filter(Boolean).sort((a, b) => a.left - b.left);
-  // Codelabels in twee lagen (boven/onder de balk); een label vervalt als er
-  // in beide lagen geen ruimte meer is — de tooltip toont dan nog naam + datum.
-  const MIN_AFSTAND = 7;   // ± labelbreedte in % van de tijdas (codes zijn breder)
+  // Codelabels (met datum) in twee lagen (boven/onder de balk); een label
+  // vervalt als er in beide lagen geen ruimte meer is — de tooltip toont dan
+  // nog naam + datum.
+  const MIN_AFSTAND = 11;   // ± labelbreedte in % van de tijdas (code + datum is breder)
   const laatste = { boven: -Infinity, onder: -Infinity };
   items.forEach((it) => {
     if (it.left - laatste.boven >= MIN_AFSTAND) { it.lane = 'boven'; laatste.boven = it.left; }
@@ -899,7 +919,7 @@ function mijlpaalMarkers(mijlpalen, pos, prefix) {
     const titel = `${prefix} — ◆ ${it.code} · ${naam}: ${fmtDatum(it.d)}${it.behaald ? ' (gepasseerd)' : ''}`;
     const rand = it.left < 2 ? ' rand-l' : it.left > 97 ? ' rand-r' : '';
     const lbl = it.lane
-      ? `<span class="gmp-lbl kern ${it.lane}${it.behaald ? ' behaald' : ''}${rand}" style="left:${it.left}%" title="${htmlEsc(titel)}">${htmlEsc(it.code)}</span>`
+      ? `<span class="gmp-lbl kern ${it.lane}${it.behaald ? ' behaald' : ''}${rand}" style="left:${it.left}%" title="${htmlEsc(titel)}">${htmlEsc(it.code)} <span class="gmp-datum">${htmlEsc(fmtDatumKort(it.d))}</span></span>`
       : '';
     return `<span class="gmp kern${it.behaald ? ' behaald' : ''}" style="left:${it.left}%" title="${htmlEsc(titel)}"></span>${lbl}`;
   }).join('');
@@ -969,7 +989,7 @@ function wpUitklapHtml(w, magBew) {
   };
   const scrollHtml = rest.length ? `<div class="wp-taken-scroll">${rest.map(taakRij).join('')}</div>` : '';
 
-  return `<div class="wp-uitklap">${band}${stapHtml}${scrollHtml}</div>`;
+  return `<div class="wp-uitklap">${band}${typeof kpBandRegel === 'function' ? kpBandRegel(w) : ''}${stapHtml}${scrollHtml}</div>`;
 }
 
 // Bindt de "vink af"-knop en checkboxes binnen een inline wp-uitklap. Gedeeld
@@ -1040,7 +1060,7 @@ function renderPlanning() {
     const magBew = !window.Auth || Auth.magWpBewerken(w.id);
     return `<div class="gwp${open ? ' open' : ''}" data-wp="${htmlEsc(w.id)}">
       <div class="grow wp" role="button" tabindex="0" title="${htmlEsc(titel)} — klik om de processtappen ${open ? 'in' : 'uit'} te klappen">
-        <div class="glabel"><span class="gchev">${open ? '▾' : '▸'}</span>${htmlEsc(w.wp)}${rest ? `<span class="grest" title="${rest} restpunt(en) — schuiven door naar een volgende fase">⚑${rest}</span>` : ''}</div>
+        <div class="glabel"><span class="gchev">${open ? '▾' : '▸'}</span>${htmlEsc(w.wp)}${rest ? `<span class="grest" title="${rest} restpunt(en) — schuiven door naar een volgende fase">⚑${rest}</span>` : ''}${typeof kpMiniChip === 'function' ? kpMiniChip(w) : ''}</div>
         <div class="gtrack">${faseSegs([w], titel)}${mijlpaalMarkers(w.mijlpalen, pos, titel)}${vandaagLijn}</div>
       </div>
       ${open ? wpUitklapHtml(w, magBew) : ''}
@@ -1077,7 +1097,7 @@ function renderPlanning() {
           <div class="glabel"><span class="gchev">${open ? '▾' : '▸'}</span><b>APD ${htmlEsc(apd)}</b><span class="gsub">${sub.length} WP</span></div>
           <div class="gtrack apd">${faseSegs(sub, titel)}${mijlpaalMarkers(apdMijlpalen, pos, titel)}${vandaagLijn}</div>
         </div>
-        <div class="gstatusrij">${chips}${restChip}</div>
+        <div class="gstatusrij">${chips}${restChip}${typeof kpApdChip === 'function' ? kpApdChip(sub) : ''}</div>
         ${open ? `<div class="gwps">${sub.map(wpRij).join('')}</div>` : ''}
       </div>`;
     }).join('');
@@ -1106,7 +1126,8 @@ function renderPlanning() {
 
   el('#ganttLegenda').innerHTML = FASES.map((f) => `<span class="leg"><i style="background:${f.kleur}"></i>${htmlEsc(f.naam)}</span>`).join('') +
     '<span class="leg"><i class="leg-mp"></i>kernmijlpaal · Start VO · VO→DO · T3·DO · T4·UO · T5·NAO (gevuld = gepasseerd)</span>' +
-    `<span class="leg"><i style="background:${STATUSSEN.restpunt.kleur}"></i>⚑ restpunt — schuift door naar een volgende fase</span>`;
+    `<span class="leg"><i style="background:${STATUSSEN.restpunt.kleur}"></i>⚑ restpunt — schuift door naar een volgende fase</span>` +
+    '<span class="leg">⚡ kritieke pad krap of te laat (speling in werkdagen — zie het tabblad Kritiek pad)</span>';
 }
 
 /* -------------------------------- Taken ---------------------------------- */
@@ -1486,6 +1507,82 @@ function voortgangRijHtml(naam, set) {
 function dashboardWps() {
   return State.dashScope === 'portfolio' ? State.werkpakketten : State.werkpakketten.filter((w) => w.project === State.dashScope);
 }
+
+/* ------------------- Dashboard: twee niveaus (KPI ▸ detail) --------------- */
+// Niveau 1 toont alleen visuele KPI's; de detailpanelen (niveau 2) verschijnen
+// pas na doorklikken op een tegel.
+const DASH_SECTIES = {
+  voortgang:   'Voortgang & team',
+  status:      'Status & fase',
+  mijlpalen:   'Mijlpalen & tolgates',
+  kritiekpad:  'Kritieke pad bewaking',
+  risico:      'Risico & aandacht',
+  budget:      'Budget & wijzigingen',
+  onderzoeken: 'Conditionerende onderzoeken',
+  uitvoering:  'Uitvoering',
+};
+let dashSectieActief = null;
+
+function toonDashNiveau() {
+  const overzicht = el('#dashOverzicht'), detail = el('#dashDetail');
+  if (!overzicht || !detail) return;
+  const open = !!(dashSectieActief && DASH_SECTIES[dashSectieActief]);
+  overzicht.style.display = open ? 'none' : '';
+  detail.style.display = open ? '' : 'none';
+  els('#dashDetail .dash-sectie').forEach((sec) => sec.classList.toggle('actief', sec.dataset.sectie === dashSectieActief));
+  if (open) el('#dashDetailTitel').textContent = DASH_SECTIES[dashSectieActief];
+  const terug = el('#dashTerug');
+  if (terug) terug.onclick = () => { dashSectieActief = null; toonDashNiveau(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+}
+function openDashSectie(key) {
+  if (!DASH_SECTIES[key]) return;
+  dashSectieActief = key;
+  toonDashNiveau();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Grote voortgangsring voor de hero-kaart (donkere achtergrond).
+function svgRing(pct) {
+  const r = 54, c = 2 * Math.PI * r;
+  const dash = (Math.max(0, Math.min(100, pct)) / 100 * c).toFixed(1);
+  return `<svg viewBox="0 0 128 128" class="ring-svg" role="img" aria-label="Gemiddelde voortgang ${pct}%">
+    <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6b7d8"/><stop offset="1" stop-color="#d63d90"/></linearGradient></defs>
+    <circle cx="64" cy="64" r="${r}" fill="none" stroke="rgba(255,255,255,.16)" stroke-width="11"/>
+    <circle cx="64" cy="64" r="${r}" fill="none" stroke="url(#ringGrad)" stroke-width="11" stroke-linecap="round"
+      stroke-dasharray="${dash} ${c.toFixed(1)}" transform="rotate(-90 64 64)"/>
+    <text x="64" y="62" text-anchor="middle" font-size="27" font-weight="750" fill="#fff">${pct}%</text>
+    <text x="64" y="80" text-anchor="middle" font-size="8.5" font-weight="700" letter-spacing="1" fill="#e6bcd4">GEM. VOORTGANG</text>
+  </svg>`;
+}
+
+// Compacte sparkline (0–100%) van de momentopnames.
+function svgSparkline(reeks, lijn, vlak, dot) {
+  const W = 190, H = 52, p = 6;
+  const xs = (i) => p + (i / (reeks.length - 1)) * (W - 2 * p);
+  const ys = (v) => p + (1 - v / 100) * (H - 2 * p);
+  const pts = reeks.map((r, i) => `${xs(i).toFixed(1)},${ys(r.val).toFixed(1)}`).join(' ');
+  const laatste = reeks[reeks.length - 1];
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Voortgangstrend, laatste meting ${laatste.val}%">
+    <polygon points="${p},${H - p} ${pts} ${W - p},${H - p}" fill="${vlak}"/>
+    <polyline points="${pts}" fill="none" stroke="${lijn}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${xs(reeks.length - 1).toFixed(1)}" cy="${ys(laatste.val).toFixed(1)}" r="3.2" fill="${dot}"/>
+  </svg>`;
+}
+
+// Mini-histogram: mijlpalen per week, 13 weken vooruit (één kleur; het
+// fase-gekleurde detail staat in de sectie Mijlpalen & tolgates).
+function svgMiniHisto(totals, kleur) {
+  const n = totals.length, W = 206, H = 52, gap = 4;
+  const bw = (W - gap * (n - 1)) / n;
+  const max = Math.max(1, ...totals);
+  const bars = totals.map((t, i) => {
+    const h = t ? Math.max(4, (t / max) * (H - 6)) : 2;
+    const wkStart = new Date(VANDAAG); wkStart.setDate(wkStart.getDate() + i * 7);
+    return `<rect x="${(i * (bw + gap)).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${t ? kleur : 'var(--line, #eae2e9)'}"><title>Week van ${fmtDatumKort(wkStart)}: ${t} mijlpa${t === 1 ? 'al' : 'len'}</title></rect>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Mijlpalen per week, komende 13 weken">${bars}</svg>`;
+}
 function renderDashboard() {
   const projecten = [...new Set(State.werkpakketten.map((w) => w.project))].sort();
   if (State.dashScope !== 'portfolio' && !projecten.includes(State.dashScope)) State.dashScope = 'portfolio';
@@ -1521,20 +1618,52 @@ function renderDashboard() {
     else trend = `<div class="kpi-trend flat">– gelijk sinds ${fmtDatum(parseDatum(vorige.datum))}</div>`;
   }
 
+  // Hero: grote voortgangsring, kerncijfers en de trend-sparkline.
+  const projectenInScope = [...new Set(wps.map((w) => w.project))];
+  const trendReeks = State.snapshots
+    .map((sn) => ({ datum: sn.datum, val: State.dashScope === 'portfolio' ? sn.pct : (sn.perProject[State.dashScope] ?? null) }))
+    .filter((p) => p.val != null);
+  const heroCijfers = [
+    { val: s.aantal, label: 'Werkpakketten' },
+    { val: `${(s.meters / 1000).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}<small> km</small>`, label: 'Nieuw tracé' },
+    { val: s.boringen.toLocaleString('nl-NL'), label: 'Boringen' },
+    { val: `${actGereed}<small>/${actTotaal}</small>`, label: 'Activiteiten gereed' },
+    State.dashScope === 'portfolio'
+      ? { val: projectenInScope.length, label: 'Projecten' }
+      : { val: s.apds.length, label: "APD's" },
+    { val: s.engineers.length, label: 'Engineers' },
+  ];
+  el('#dashHero').innerHTML = `
+    <div class="hero-ring">${svgRing(s.pct)}${trend}</div>
+    <div class="hero-cijfers">${heroCijfers.map((c) => `<div class="hero-c"><b>${c.val}</b><span>${c.label}</span></div>`).join('')}</div>
+    <div class="hero-spark" role="button" tabindex="0" title="Klik voor de voortgangsdetails">
+      <span class="hs-label">Voortgangstrend</span>
+      ${trendReeks.length >= 2
+        ? svgSparkline(trendReeks, '#f6b7d8', 'rgba(246,183,216,.22)', '#fff')
+        : '<span class="hs-leeg">Nog geen momentopnames — leg ze vast onder Beheer → Instellingen.</span>'}
+    </div>`;
+  const spark = el('#dashHero .hero-spark');
+  if (spark) {
+    const openSpark = () => openDashSectie('voortgang');
+    spark.addEventListener('click', openSpark);
+    spark.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSpark(); } });
+  }
+
+  // Signaal-KPI's: wat vraagt aandacht? Klik = doorklikken naar de details.
+  let kpKnel = null;
+  if (typeof kritiekPadVoor === 'function') {
+    kpKnel = wps.filter((w) => { const k = kritiekPadVoor(w); return k.bindend && (k.status === 'telaat' || k.status === 'krap'); }).length;
+  }
   const tiles = [
-    { val: s.aantal, label: 'Werkpakketten', cls: '', actie: 'overzicht' },
-    { val: `${(s.meters/1000).toLocaleString('nl-NL',{maximumFractionDigits:1})}<small> km</small>`, label: 'Nieuw tracé', cls: 'kpi-paars', actie: 'overzicht' },
-    { val: s.boringen.toLocaleString('nl-NL'), label: 'Boringen', cls: '', actie: 'overzicht' },
-    { val: `${s.pct}<small>%</small>`, label: 'Gem. voortgang', cls: 'kpi-groen', actie: 'overzicht', extra: trend },
-    { val: `${actGereed}<small>/${actTotaal}</small>`, label: 'Activiteiten gereed', cls: '', actie: 'overzicht' },
-    { val: s.kritiek, label: 'Kritieke werkpakketten', cls: 'kpi-rood', actie: 'kritiek' },
-    { val: s.gevaar, label: 'Werkpakketten met risico', cls: 'kpi-amber', actie: 'gevaar' },
-    { val: telling.geblokkeerd + telling.issue, label: 'Geblokkeerd / issues', cls: 'kpi-rood', actie: 'geblok' },
+    { val: s.kritiek, label: 'Kritieke werkpakketten', cls: s.kritiek ? 'kpi-rood' : 'kpi-groen', actie: 'kritiek' },
+    { val: s.gevaar, label: 'Werkpakketten met risico', cls: s.gevaar ? 'kpi-amber' : 'kpi-groen', actie: 'gevaar' },
+    { val: telling.geblokkeerd + telling.issue, label: 'Geblokkeerd / issues', cls: (telling.geblokkeerd + telling.issue) ? 'kpi-rood' : 'kpi-groen', actie: 'geblok' },
     { val: mp30, label: 'Mijlpalen ≤ 30 dagen', cls: '', actie: 'mijlpalen' },
   ];
+  if (kpKnel != null) tiles.push({ val: kpKnel, label: 'Knelpunten kritiek pad', cls: kpKnel ? 'kpi-rood' : 'kpi-groen', actie: 'kritiekpad' });
   el('#dashKpis').innerHTML = tiles.map((t) =>
     `<div class="kpi klikbaar ${t.cls}" data-actie="${t.actie}" tabindex="0" role="button" title="Klik voor details">
-      <div class="kpi-val">${t.val}</div><div class="kpi-label">${t.label}</div>${t.extra || ''}<span class="kpi-pijl">›</span></div>`).join('');
+      <div class="kpi-val">${t.val}</div><div class="kpi-label">${t.label}</div><span class="kpi-pijl">›</span></div>`).join('');
   els('#dashKpis .kpi').forEach((t) => {
     t.addEventListener('click', () => kpiActie(t.dataset.actie));
     t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); kpiActie(t.dataset.actie); } });
@@ -1615,17 +1744,188 @@ function renderDashboard() {
   wps.forEach((w) => { const a = apdVan(w); if (!apdSet[a]) apdSet[a] = []; apdSet[a].push(w); });
   el('#dashApd').innerHTML = Object.entries(apdSet).sort().map(([a, set]) => voortgangRijHtml('APD ' + a, set)).join('') || '<div class="leeg">—</div>';
 
+  renderDashTegels(wps, s, telling, mp30);
+
   renderTrend();
   renderTijdlijn();
+  if (typeof renderKritiekPadDash === 'function') renderKritiekPadDash();
   if (typeof renderDashboardTsb === 'function') renderDashboardTsb();
   if (typeof renderDashboardTolgates === 'function') renderDashboardTolgates();
   if (typeof renderDashboardWijzigingen === 'function') renderDashboardWijzigingen();
   if (typeof renderDashboardOnderzoeken === 'function') renderDashboardOnderzoeken();
+  if (typeof renderDashboardUitvoering === 'function') renderDashboardUitvoering();
+
+  toonDashNiveau();
+}
+
+/* ----------------- Dashboard: visuele tegels (niveau 1) ------------------ */
+// Elke tegel is een compacte visual met een klik-door naar de detailsectie.
+function renderDashTegels(wps, s, telling, mp30) {
+  const node = el('#dashTegels'); if (!node) return;
+  const tegels = [];
+  const totAct = Object.values(telling).reduce((a, b) => a + b, 0) || 1;
+  const totWp = wps.length || 1;
+
+  // 1. Status & fase — mini-donut + mini-fasebalk.
+  let acc = 0;
+  const stops = Object.entries(telling).filter(([, n]) => n > 0).map(([k, n]) => {
+    const van = (acc / totAct) * 100; acc += n;
+    return `${STATUSSEN[k].kleur} ${van}% ${(acc / totAct) * 100}%`;
+  }).join(', ');
+  const pctGereed = Math.round((telling.gereed / totAct) * 100);
+  const faseSegs = [...FASES.map((f) => f.naam), 'Afgerond', 'Onbekend'].filter((n) => s.faseTeller[n]).map((n) => {
+    const fase = FASES.find((f) => f.naam === n);
+    const kleur = fase ? fase.kleur : (n === 'Afgerond' ? '#475569' : '#cbd5e1');
+    return `<div class="seg" style="width:${(s.faseTeller[n] / totWp) * 100}%;background:${kleur}" title="${htmlEsc(n)}: ${s.faseTeller[n]}"></div>`;
+  }).join('');
+  tegels.push({
+    sectie: 'status', titel: 'Status & fase',
+    html: `<div class="dt-donut-rij">
+        <div class="dash-mini-donut" style="background:conic-gradient(${stops || '#e2e8f0 0 100%'})"><span><b>${pctGereed}%</b>gereed</span></div>
+        <div class="dt-donut-info">
+          <span class="leg"><i style="background:${STATUSSEN.gereed.kleur}"></i>${telling.gereed} gereed</span>
+          <span class="leg"><i style="background:${STATUSSEN.bezig.kleur}"></i>${telling.bezig} lopend</span>
+          <span class="leg"><i style="background:${STATUSSEN.open.kleur}"></i>${telling.open} niet gestart</span>
+        </div>
+      </div>
+      <div class="fasebalk mini" style="margin-top:14px">${faseSegs}</div>`,
+    voet: `${telling.vertraagd} vertraagd · ${telling.geblokkeerd + telling.issue} geblokkeerd/issue · ${telling.restpunt} restpunt`,
+  });
+
+  // 2. Mijlpalen & tolgates — mini-histogram 13 weken.
+  const eind90 = new Date(VANDAAG); eind90.setDate(eind90.getDate() + 91);
+  const weekTot = Array.from({ length: 13 }, () => 0);
+  let mp90 = 0;
+  wps.forEach((w) => MIJLPALEN.forEach((m) => {
+    const d = parseDatum(w.mijlpalen[m.key]);
+    if (d && d >= VANDAAG && d <= eind90) { mp90++; weekTot[Math.min(12, Math.floor(dagenVerschil(VANDAAG, d) / 7))]++; }
+  }));
+  tegels.push({
+    sectie: 'mijlpalen', titel: 'Mijlpalen & tolgates',
+    html: svgMiniHisto(weekTot, 'var(--accent-2, #d63d90)'),
+    voet: `${mp30} binnen 30 dagen · ${mp90} binnen 90 dagen`,
+  });
+
+  // 3. Kritiek pad — bindende mijlpalen: te laat / krap / op koers.
+  if (typeof kritiekPadVoor === 'function') {
+    let telaat = 0, krap = 0, koers = 0;
+    wps.forEach((w) => {
+      const k = kritiekPadVoor(w);
+      if (!k.bindend) return;
+      if (k.status === 'telaat') telaat++; else if (k.status === 'krap') krap++; else koers++;
+    });
+    tegels.push({
+      sectie: 'kritiekpad', titel: 'Kritiek pad',
+      html: `<div class="dt-cijfers">
+          <div class="dt-c rood"><b>${telaat}</b><span>te laat</span></div>
+          <div class="dt-c amber"><b>${krap}</b><span>&lt; 1 wk speling</span></div>
+          <div class="dt-c groen"><b>${koers}</b><span>op koers</span></div>
+        </div>`,
+      voet: telaat + krap ? 'Bindende mijlpalen die zonder ingrijpen schuiven' : 'Alle kritieke paden hebben voldoende speling',
+    });
+  }
+
+  // 4. Risico & aandacht — verdeling van de werkpakketten.
+  const metSignalen = wps.filter((w) => signalen(w).length).length;
+  const rSeg = (n, kleur, label) => n ? `<span class="stseg" style="width:${(n / totWp) * 100}%;background:${kleur}" title="${label}: ${n}"></span>` : '';
+  tegels.push({
+    sectie: 'risico', titel: 'Risico & aandacht',
+    html: `<div class="dt-cijfers">
+        <div class="dt-c groen"><b>${s.opKoers}</b><span>op koers</span></div>
+        <div class="dt-c amber"><b>${s.gevaar}</b><span>aandacht</span></div>
+        <div class="dt-c rood"><b>${s.kritiek}</b><span>kritiek</span></div>
+      </div>
+      <div class="statbar" style="margin-top:12px">${rSeg(s.opKoers, 'var(--groen, #0e9f6e)', 'Op koers')}${rSeg(s.gevaar, 'var(--amber, #f59e0b)', 'Aandacht / risico')}${rSeg(s.kritiek, 'var(--rood, #ef4444)', 'Kritiek')}</div>`,
+    voet: `${metSignalen} werkpakket${metSignalen === 1 ? '' : 'ten'} met actieve signalen`,
+  });
+
+  // 5. Voortgang & team — sparkline op wit + teamomvang.
+  const reeks = State.snapshots
+    .map((sn) => ({ val: State.dashScope === 'portfolio' ? sn.pct : (sn.perProject[State.dashScope] ?? null) }))
+    .filter((p) => p.val != null);
+  tegels.push({
+    sectie: 'voortgang', titel: 'Voortgang & team',
+    html: reeks.length >= 2
+      ? svgSparkline(reeks, 'var(--accent, #b01e6d)', 'rgba(176,30,109,.10)', 'var(--accent, #b01e6d)')
+      : `<div class="dt-leeg">Leg momentopnames vast (Beheer → Instellingen) om de trend te zien.</div>`,
+    voet: `${s.engineers.length} engineer${s.engineers.length === 1 ? '' : 's'} · ${s.apds.length} APD's · per project & APD in het detail`,
+  });
+
+  // 6. Budget & wijzigingen — alleen als er TSB-data in scope is.
+  if (typeof tsbRapportData === 'function' && typeof fmtGeld === 'function') {
+    const td = tsbRapportData(State.dashScope);
+    if (td) {
+      const pctB = td.totalen.begrootBedrag ? Math.round((td.totalen.totaalBesteed / td.totalen.begrootBedrag) * 100) : null;
+      const kleur = pctB == null ? '#94a3b8' : pctB > 100 ? 'var(--rood, #ef4444)' : pctB > 85 ? 'var(--amber, #f59e0b)' : 'var(--groen, #0e9f6e)';
+      let wzVoet = '';
+      if (typeof wzInScope === 'function' && typeof vtwInScope === 'function') {
+        const wzLijst = wzInScope(State.dashScope), vtws = vtwInScope(State.dashScope);
+        if (wzLijst.length || vtws.length) wzVoet = ` · ${wzLijst.length} wijziging${wzLijst.length === 1 ? '' : 'en'} · ${vtws.length} VTW's`;
+      }
+      tegels.push({
+        sectie: 'budget', titel: 'Budget & wijzigingen',
+        html: `<div class="dt-meter-kop"><span>${fmtGeld(td.totalen.totaalBesteed)} besteed</span><b style="color:${kleur}">${pctB != null ? pctB + '%' : '—'}</b></div>
+          <div class="statbar"><span class="stseg" style="width:${Math.min(100, pctB || 0)}%;background:${kleur}"></span></div>
+          <div class="dt-meter-sub">van ${fmtGeld(td.totalen.begrootBedrag)} begroot (TSB)</div>`,
+        voet: `Restbudget ${fmtGeld(td.totalen.restbudget)}${wzVoet}`,
+      });
+    }
+  }
+
+  // 7. Onderzoeken — alleen als er onderzoeken in scope zijn.
+  if (typeof onderzoekenInScope === 'function' && typeof ozGroep === 'function') {
+    const oz = onderzoekenInScope(State.dashScope);
+    if (oz.length) {
+      const g = { nodig: 0, lopend: 0, gereed: 0 };
+      oz.forEach((o) => { const k = ozGroep(o); if (g[k] != null) g[k]++; });
+      const overtijd = typeof ozOvertijd === 'function' ? oz.filter(ozOvertijd).length : 0;
+      const oSeg = (n, kleur, label) => n ? `<span class="stseg" style="width:${(n / oz.length) * 100}%;background:${kleur}" title="${label}: ${n}"></span>` : '';
+      tegels.push({
+        sectie: 'onderzoeken', titel: 'Onderzoeken',
+        html: `<div class="dt-cijfers">
+            <div class="dt-c"><b>${g.nodig}</b><span>uit te zetten</span></div>
+            <div class="dt-c blauw"><b>${g.lopend}</b><span>loopt</span></div>
+            <div class="dt-c groen"><b>${g.gereed}</b><span>gereed</span></div>
+          </div>
+          <div class="statbar" style="margin-top:12px">${oSeg(g.nodig, '#94a3b8', 'Nog uit te zetten')}${oSeg(g.lopend, '#0ea5e9', 'Uitgezet / loopt')}${oSeg(g.gereed, '#10b981', 'Gereed')}</div>`,
+        voet: overtijd ? `⚠ ${overtijd} over de verwachte datum` : `${oz.length} conditionerende onderzoeken in scope`,
+      });
+    }
+  }
+
+  // 8. Uitvoering — alleen als er registraties of geplande boringen zijn.
+  if (typeof uvTotalen === 'function' && typeof uvFmt === 'function') {
+    const t = uvTotalen(wps);
+    if (t.regs.length || t.bGepland) {
+      const meter = (pct, label) => `
+        <div class="dt-meter-kop"><span>${label}</span><b style="color:${pct != null && pct >= 100 ? 'var(--groen, #0e9f6e)' : 'var(--accent, #b01e6d)'}">${pct != null ? pct + '%' : '—'}</b></div>
+        <div class="statbar"><span class="stseg" style="width:${Math.min(100, pct || 0)}%;background:${pct != null && pct >= 100 ? 'var(--groen, #0e9f6e)' : 'var(--accent-2, #d63d90)'}"></span></div>`;
+      tegels.push({
+        sectie: 'uitvoering', titel: 'Uitvoering',
+        html: `${meter(t.mPct, 'Meters')}<div style="height:10px"></div>${meter(t.bPct, 'Boringen')}`,
+        voet: `${uvFmt(t.mReal)} van ${uvFmt(t.mGepland)} m · ${uvFmt(t.bReal)} van ${uvFmt(t.bGepland)} boringen`,
+      });
+    }
+  }
+
+  node.innerHTML = tegels.map((t) => `
+    <div class="dash-tegel" data-sectie="${t.sectie}" tabindex="0" role="button" title="Klik voor de details">
+      <div class="dt-kop"><span class="dt-titel">${t.titel}</span><span class="dt-pijl">›</span></div>
+      <div class="dt-visual">${t.html}</div>
+      <div class="dt-voet">${t.voet}</div>
+    </div>`).join('');
+  els('#dashTegels .dash-tegel').forEach((b) => {
+    const open = () => openDashSectie(b.dataset.sectie);
+    b.addEventListener('click', open);
+    b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  });
 }
 
 /* ----------------------- Dashboard: interactie & visuals ----------------- */
 // Klik op een dashboard-tegel → navigeer naar het bijbehorende, gefilterde scherm.
 function kpiActie(actie) {
+  // Kritiek pad heeft een eigen detailsectie binnen het dashboard.
+  if (actie === 'kritiekpad') { openDashSectie('kritiekpad'); return; }
   const projectScope = State.dashScope === 'portfolio' ? '' : State.dashScope;
   State.filters = { project: projectScope, apd: '', engineer: '', fase: '', risico: '', zoek: '' };
   el('#filterZoek').value = '';
@@ -1870,6 +2170,7 @@ function bouwRapportData(scope, van, tot, label) {
     tsb: typeof tsbRapportData === 'function' ? tsbRapportData(scope) : null,
     wijzigingen: typeof wijzigingenRapportData === 'function' ? wijzigingenRapportData(scope) : null,
     schouwen: typeof schouwRapportData === 'function' ? schouwRapportData(scope) : null,
+    uitvoering: typeof uitvoeringRapportData === 'function' ? uitvoeringRapportData(scope) : null,
     perProject,
   };
 }
@@ -2335,6 +2636,7 @@ async function init() {
   if (typeof wijzigingenInit === 'function') wijzigingenInit();
   if (typeof documentFormatsInit === 'function') documentFormatsInit();
   if (typeof schouwInit === 'function') schouwInit();
+  if (typeof uitvoeringInit === 'function') uitvoeringInit();
 
   els('.tab').forEach((t) => t.addEventListener('click', () => toonTab(t.dataset.tab)));
   el('#detailClose').addEventListener('click', sluitDetail);
@@ -2360,10 +2662,12 @@ async function init() {
     renderFilterIndicator();
     // Alle weergaven die het zoekfilter gebruiken direct meeverversen.
     renderOverzicht(); renderPlanning(); renderTaken();
+    if (typeof renderKritiekPad === 'function') renderKritiekPad();
     renderVergunningen();
     if (typeof renderZro === 'function') renderZro();
     if (typeof renderWijzigingen === 'function') renderWijzigingen();
     if (typeof renderSchouwen === 'function') renderSchouwen();
+    if (typeof renderUitvoering === 'function') renderUitvoering();
   });
   el('#filterReset').addEventListener('click', () => { State.filters = { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' }; State.takenFilter = 'alle'; el('#filterZoek').value = ''; render(); });
 
@@ -2408,7 +2712,7 @@ async function init() {
     reader.readAsArrayBuffer(file); e.target.value = '';
   });
   el('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, onderzoeken: State.onderzoeken, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances, wijzigingen: State.wijzigingen, vtws: State.vtws, schouwen: State.schouwen }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ werkpakketten: State.werkpakketten, voortgang: State.voortgang, doorlooptijden: State.doorlooptijden, snapshots: State.snapshots, vergunningen: State.vergunningen, onderzoeken: State.onderzoeken, risicos: State.risicos, activiteitInfo: State.activiteitInfo, tsb: State.tsb, tolgates: State.tolgates, tolgateInstances: State.tolgateInstances, wijzigingen: State.wijzigingen, vtws: State.vtws, schouwen: State.schouwen, realisaties: State.realisaties, uitvoeringPlan: State.uitvoeringPlan }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hvp-processturing-${isoDatum(new Date())}.json`; a.click();
   });
   el('#jsonFile').addEventListener('change', (e) => {
@@ -2431,6 +2735,8 @@ async function init() {
         if (data.wijzigingen) State.wijzigingen = data.wijzigingen;
         if (data.vtws) State.vtws = data.vtws;
         if (data.schouwen) State.schouwen = data.schouwen;
+        if (data.realisaties) State.realisaties = data.realisaties;
+        if (data.uitvoeringPlan) State.uitvoeringPlan = data.uitvoeringPlan;
         State.bewaar(); render();
         el('#importMelding').innerHTML = `<span class="ok">Werkbestand hersteld.</span>`;
         toast('Werkbestand hersteld', 'ok'); toonTab('overzicht');
@@ -2460,6 +2766,7 @@ async function init() {
     State.tolgateInstances = [];
     State.wijzigingen = []; State.vtws = [];
     State.schouwen = [];
+    State.realisaties = []; State.uitvoeringPlan = {};
     if (window.SchouwFotos) SchouwFotos.wisAlles();
     State.bewaar(); render(); toonTab('overzicht'); toast('Alles gewist', 'ok');
   });

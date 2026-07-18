@@ -53,6 +53,8 @@ const DB = (() => {
       wijzigingen: cache.wijzigingen || [],
       vtws: cache.vtws || [],
       schouwen: cache.schouwen || [],
+      realisaties: cache.realisaties || [],
+      uitvoeringPlan: cache.uitvoeringPlan || {},
     };
     try {
       setStatus('bezig');
@@ -78,6 +80,8 @@ const DB = (() => {
           if (Array.isArray(d.wijzigingen)) staat.wijzigingen = d.wijzigingen;
           if (Array.isArray(d.vtws)) staat.vtws = d.vtws;
           if (Array.isArray(d.schouwen)) staat.schouwen = d.schouwen;
+          if (Array.isArray(d.realisaties)) staat.realisaties = d.realisaties;
+          if (d.uitvoeringPlan) staat.uitvoeringPlan = d.uitvoeringPlan;
           laatsteSync = d._bijgewerkt || new Date().toISOString();
           schrijfCache(staat);
           setStatus('online');
@@ -122,6 +126,8 @@ const DB = (() => {
           wijzigingen: staat.wijzigingen,
           vtws: staat.vtws,
           schouwen: staat.schouwen,
+          realisaties: staat.realisaties,
+          uitvoeringPlan: staat.uitvoeringPlan,
         }),
       });
       if (r.ok) {

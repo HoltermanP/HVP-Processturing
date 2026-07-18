@@ -7,7 +7,7 @@
 
 import { neon } from '@neondatabase/serverless';
 
-const SLEUTELS = ['werkpakketten', 'voortgang', 'doorlooptijden', 'snapshots', 'instellingen', 'vergunningen', 'onderzoeken', 'risicos', 'gebruikers', 'toewijzingen', 'activiteitInfo', 'tsb', 'tolgates', 'tolgateInstances', 'wijzigingen', 'vtws', 'schouwen'];
+const SLEUTELS = ['werkpakketten', 'voortgang', 'doorlooptijden', 'snapshots', 'instellingen', 'vergunningen', 'onderzoeken', 'risicos', 'gebruikers', 'toewijzingen', 'activiteitInfo', 'tsb', 'tolgates', 'tolgateInstances', 'wijzigingen', 'vtws', 'schouwen', 'realisaties', 'uitvoeringPlan'];
 
 async function ensureTabel(sql) {
   await sql`CREATE TABLE IF NOT EXISTS hvp_kv (
