@@ -125,6 +125,7 @@ function renderUitvoering() {
 
   const perNiveau = State.filters.project ? uvWpTabel(wps, mag) : uvProjectTabel(wps);
   el('#uvInhoud').innerHTML = perNiveau + uvPeriodeTabel(wps, t) + uvRegistratieTabel(t.regs, mag);
+  if (typeof renderWeekrapportage === 'function') renderWeekrapportage();
 
   // Interactie: drill-down, plan bewerken, registreren, weergave wisselen.
   els('#uvInhoud .uv-project').forEach((tr) => tr.addEventListener('click', () => {

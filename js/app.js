@@ -82,6 +82,7 @@ const State = {
   schouwen: [],
   realisaties: [],      // voortgangsregistraties uitvoering (meters/boringen per periode)
   uitvoeringPlan: {},   // per wp-id: geplande boringen + eventueel afwijkende meters
+  weekrapporten: [],    // voortgangsrapportage per project + week (incl. schade & omgeving)
   filters: { project: '', apd: '', engineer: '', fase: '', risico: '', zoek: '' },
   planningOpen: {},   // opengeklapte APD's op de planningpagina (key: project||apd)
   wpOpen: {},         // opengeklapte werkpakketten (inline procesuitklap; key: wp.id) — gedeeld tussen Overzicht en Planning
@@ -119,6 +120,7 @@ const State = {
     this.schouwen = staat.schouwen || [];
     this.realisaties = staat.realisaties || [];
     this.uitvoeringPlan = staat.uitvoeringPlan || {};
+    this.weekrapporten = staat.weekrapporten || [];
     const verseSeed = !(staat.werkpakketten && staat.werkpakketten.length);
     this.werkpakketten = verseSeed ? (window.SEED_WERKPAKKETTEN || []) : staat.werkpakketten;
     // Verse start: ook de statussen uit de planning meeladen.
@@ -192,6 +194,7 @@ const State = {
       schouwen: this.schouwen,
       realisaties: this.realisaties,
       uitvoeringPlan: this.uitvoeringPlan,
+      weekrapporten: this.weekrapporten,
     });
   },
   wpVoortgang(wpId) {
@@ -2400,6 +2403,7 @@ function bouwRapportData(scope, van, tot, label) {
     wijzigingen: typeof wijzigingenRapportData === 'function' ? wijzigingenRapportData(scope) : null,
     schouwen: typeof schouwRapportData === 'function' ? schouwRapportData(scope) : null,
     uitvoering: typeof uitvoeringRapportData === 'function' ? uitvoeringRapportData(scope) : null,
+    weekrapportage: typeof weekrapportageRapportData === 'function' ? weekrapportageRapportData(scope) : null,
     perProject,
   };
 }
