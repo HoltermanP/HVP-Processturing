@@ -80,6 +80,8 @@ function renderWeekrapportage() {
   const acties = mag ? `
       <button class="primair" id="wrToevoegen">＋ Week registreren</button>
       <label class="filebtn" title="Bijgewerkt sjabloon uploaden (CSV met puntkomma's, zoals de download)">⬆ Sjabloon uploaden<input type="file" id="wrUpload" accept=".csv,text/csv" hidden></label>` : '';
+  const wisKnop = mag && recs.length
+    ? `<button class="gevaar" id="wrWissen" title="Alle weekrapportages van dit project verwijderen (bijv. na een verkeerde upload)">🗑 Wissen</button>` : '';
 
   // Totalen voor de KPI-regel.
   const t = recs.reduce((s, r) => {
@@ -89,22 +91,31 @@ function renderWeekrapportage() {
     s.kNieuw += +r.klachtenNieuw || 0; s.kAf += +r.klachtenAf || 0; s.compl += +r.complimenten || 0;
     return s;
   }, { gm: 0, gb: 0, rm: 0, rb: 0, schade: 0, kNieuw: 0, kAf: 0, compl: 0 });
-  const mPct = t.gm ? Math.round((t.rm / t.gm) * 100) : null;
+  // Voortgang t.o.v. het plan t/m de laatste week met realisatie ("op schema?"),
+  // niet t.o.v. het totale plan inclusief alle toekomstige weken.
+  let cumPlanLoop = 0, geplandTmNu = 0, heeftReal = false;
+  recs.forEach((r) => {
+    cumPlanLoop += +r.geplandMeters || 0;
+    if ((+r.realMeters || 0) > 0 || (+r.realBoringen || 0) > 0) { geplandTmNu = cumPlanLoop; heeftReal = true; }
+  });
+  const mPct = heeftReal && geplandTmNu ? Math.round((t.rm / geplandTmNu) * 100) : null;
   const kOpen = Math.max(0, t.kNieuw - t.kAf);
   const kpis = [
-    { cls: '', val: uvFmt(t.gm), label: 'meters gepland' },
+    { cls: '', val: uvFmt(t.gm), label: 'meters gepland (totaal)' },
     { cls: 'blauw', val: uvFmt(t.rm), label: 'meters gerealiseerd' },
-    { cls: mPct != null && mPct >= 100 ? 'groen' : 'blauw', val: mPct != null ? mPct + '%' : '—', label: '% van gepland' },
+    { cls: mPct != null && mPct >= 100 ? 'groen' : 'blauw', val: mPct != null ? mPct + '%' : '—', label: '% van gepland t/m nu' },
     { cls: '', val: uvFmt(t.gb), label: 'boringen gepland' },
     { cls: 'blauw', val: uvFmt(t.rb), label: 'boringen gerealiseerd' },
     { cls: t.schade ? 'rood' : 'groen', val: t.schade, label: 'schademeldingen' },
     { cls: kOpen ? 'amber' : 'groen', val: kOpen, label: 'openstaande klachten' },
   ].map((x) => `<div class="tstat ${x.cls}"><b>${x.val}</b><span>${x.label}</span></div>`).join('');
 
-  // Weektabel met cumulatief gerealiseerde meters.
-  let cum = 0;
+  // Weektabel: cumulatief gerealiseerd afgezet tegen het cumulatief geplande
+  // t/m dezelfde week (zoals de cumulatief-rijen in het Excel-sjabloon).
+  let cum = 0, cumPlan = 0;
   const rijen = recs.map((r) => {
     cum += +r.realMeters || 0;
+    cumPlan += +r.geplandMeters || 0;
     const schade = wrSchadeTotaal(r);
     const klacht = (+r.klachtenNieuw || 0) || (+r.klachtenAf || 0)
       ? `${+r.klachtenNieuw || 0} nieuw${(+r.klachtenAf || 0) ? ` · ${+r.klachtenAf} af` : ''}` : '—';
@@ -113,7 +124,7 @@ function renderWeekrapportage() {
       <td class="num">${uvFmt(r.geplandMeters)}</td>
       <td class="num">${uvFmt(r.realMeters)}</td>
       <td class="num">${uvFmt(cum)}</td>
-      <td>${uvPctCel(cum, t.gm)}</td>
+      <td>${uvPctCel(cum, cumPlan)}</td>
       <td class="num">${r.geplandBoringen ? uvFmt(r.geplandBoringen) : '—'}</td>
       <td class="num">${r.realBoringen ? uvFmt(r.realBoringen) : '—'}</td>
       <td class="num">${schade ? `<span class="kp-badge telaat">${schade}</span>` : '—'}</td>
@@ -129,11 +140,12 @@ function renderWeekrapportage() {
         <select id="wrProject" class="tsb-inp" style="min-width:150px" title="Project">${opts}</select>
         ${acties}
         <button class="ghost" id="wrDownload" title="Huidige data als CSV-sjabloon downloaden (in Excel bij te werken en weer te uploaden)">⬇ Sjabloon</button>
+        ${wisKnop}
       </div>
     </div>
     <div class="taken-stats" style="margin-bottom:14px">${kpis}</div>
     <div class="tabel-wrap"><table class="tabel">
-      <thead><tr><th>Week</th><th class="num">Gepland m</th><th class="num">Gerealiseerd m</th><th class="num">Cumulatief m</th><th>% van gepland</th><th class="num">Boringen gepland</th><th class="num">Gerealiseerd</th><th class="num">Schade</th><th>Klachten</th><th>Notitie</th></tr></thead>
+      <thead><tr><th>Week</th><th class="num">Gepland m</th><th class="num">Gerealiseerd m</th><th class="num">Cumulatief m</th><th>% van plan t/m die week</th><th class="num">Boringen gepland</th><th class="num">Gerealiseerd</th><th class="num">Schade</th><th>Klachten</th><th>Notitie</th></tr></thead>
       <tbody>${rijen || `<tr><td colspan="10" class="leeg">Nog geen weekrapportages voor ${htmlEsc(project || 'dit project')}. Registreer een week of upload het ingevulde sjabloon.</td></tr>`}</tbody>
     </table></div>
     <p class="hint" style="margin:10px 2px 0">Beide routes werken naast elkaar: een upload overschrijft alleen de weken die in het bestand staan (notities blijven bewaard); handmatige registraties blijven staan.</p>
@@ -151,6 +163,14 @@ function renderWeekrapportage() {
   if (upload) upload.addEventListener('change', (e) => wrLeesUpload(e, project));
   const dl = el('#wrDownload');
   if (dl) dl.addEventListener('click', () => wrDownloadCsv(project));
+  const wis = el('#wrWissen');
+  if (wis) wis.addEventListener('click', () => {
+    const n = wrRecords(project).length;
+    if (!confirm(`Alle ${n} weekrapportages voor ${project} verwijderen? Dit maakt zowel geüploade als handmatig geregistreerde weken ongedaan.`)) return;
+    State.weekrapporten = (State.weekrapporten || []).filter((r) => r.project !== project);
+    State.bewaar(); renderWeekrapportage();
+    toast(`Weekrapportage van ${project} gewist`, 'ok');
+  });
 }
 
 /* ----------------------- Optie 1: registratie in de app ------------------- */
