@@ -73,6 +73,7 @@ const State = {
   risicos: [],
   gebruikers: {},
   toewijzingen: {},
+  paginaRechten: {},   // per gebruiker (uid) de toegestane pagina's; geen entry = alles zichtbaar
   activiteitInfo: {},
   tsb: { formats: [], projecten: [], instellingen: {} },
   tolgates: [],
@@ -108,6 +109,7 @@ const State = {
     this.risicos = staat.risicos || [];
     this.gebruikers = staat.gebruikers || {};
     this.toewijzingen = staat.toewijzingen || {};
+    this.paginaRechten = staat.paginaRechten || {};
     this.activiteitInfo = staat.activiteitInfo || {};
     this.tsb = staat.tsb || { formats: [], projecten: [], instellingen: {} };
     // Tolgate-definities: seed T1–T4 zolang er nog geen zijn vastgelegd.
@@ -185,6 +187,7 @@ const State = {
       risicos: this.risicos,
       gebruikers: this.gebruikers,
       toewijzingen: this.toewijzingen,
+      paginaRechten: this.paginaRechten,
       activiteitInfo: this.activiteitInfo,
       tsb: this.tsb,
       tolgates: this.tolgates,
@@ -574,6 +577,7 @@ function gateUI() {
   const setTab = (naam, zicht) => { const t = document.querySelector(`.tab[data-tab="${naam}"]`); if (t) t.style.display = zicht ? '' : 'none'; };
   setTab('toewijzen', !window.Auth || Auth.magToewijzen());
   setTab('accounts', !window.Auth || Auth.magAccounts());
+  if (window.Auth) Auth.PAGINAS.forEach((p) => setTab(p.tab, Auth.magPagina(p.tab)));
 }
 
 const RISICO_LABELS = { kritiek: 'Alleen kritiek', gevaar: 'Alleen risico', geblok: 'Met geblokkeerde activiteiten', opkoers: 'Alleen op koers' };
@@ -2839,6 +2843,7 @@ function navUpdateKnop() {
 }
 
 function toonTab(naam) {
+  if (window.Auth && !Auth.magPagina(naam)) return;   // geen rechten voor deze pagina
   const huidig = huidigeTabNaam();
   if (huidig && huidig !== naam) navPush(huidig);
   els('.tab').forEach((t) => t.classList.toggle('actief', t.dataset.tab === naam));
@@ -2990,7 +2995,8 @@ async function init() {
   gateUI();
   el('#peildatum').textContent = fmtDatum(VANDAAG);
   render();
-  toonTab(Auth.magVolledig() ? 'overzicht' : 'mijn');
+  const voorkeurTab = Auth.magVolledig() ? 'overzicht' : 'mijn';
+  toonTab(Auth.magPagina(voorkeurTab) ? voorkeurTab : Auth.eersteToegestaneTab());
   // Paginahistorie pas activeren na de startweergave; de terugknop blijft op
   // de openingspagina dus verborgen.
   el('#navTerug').addEventListener('click', navTerug);

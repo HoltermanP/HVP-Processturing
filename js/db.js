@@ -46,6 +46,7 @@ const DB = (() => {
       risicos: cache.risicos || [],
       gebruikers: cache.gebruikers || {},
       toewijzingen: cache.toewijzingen || {},
+      paginaRechten: cache.paginaRechten || {},
       activiteitInfo: cache.activiteitInfo || {},
       tsb: cache.tsb || { formats: [], projecten: [], instellingen: {} },
       tolgates: cache.tolgates || [],
@@ -73,6 +74,7 @@ const DB = (() => {
           if (Array.isArray(d.risicos)) staat.risicos = d.risicos;
           if (d.gebruikers) staat.gebruikers = d.gebruikers;
           if (d.toewijzingen) staat.toewijzingen = d.toewijzingen;
+          if (d.paginaRechten) staat.paginaRechten = d.paginaRechten;
           if (d.activiteitInfo) staat.activiteitInfo = d.activiteitInfo;
           if (d.tsb) staat.tsb = d.tsb;
           if (Array.isArray(d.tolgates)) staat.tolgates = d.tolgates;
@@ -119,6 +121,7 @@ const DB = (() => {
           risicos: staat.risicos,
           gebruikers: staat.gebruikers,
           toewijzingen: staat.toewijzingen,
+          paginaRechten: staat.paginaRechten,
           activiteitInfo: staat.activiteitInfo,
           tsb: staat.tsb,
           tolgates: staat.tolgates,

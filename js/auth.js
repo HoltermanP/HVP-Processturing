@@ -30,6 +30,30 @@ const Auth = (() => {
   };
   const VOLLEDIG = ['ontwerpleider', 'manager']; // alles bewerken + toewijzen + accountbeheer
 
+  // Pagina's die een beheerder per gebruiker aan/uit kan zetten (Accounts).
+  // 'toewijzen' en 'accounts' vallen hierbuiten: die blijven uitsluitend
+  // rolgebonden (ontwerpleider/manager), zodat er altijd een pad naar
+  // accountbeheer blijft bestaan en niemand zichzelf kan buitensluiten.
+  const PAGINAS = [
+    { tab: 'overzicht', label: 'Overzicht' },
+    { tab: 'dashboard', label: 'Dashboard' },
+    { tab: 'mijn', label: 'Mijn projecten' },
+    { tab: 'mijntaken', label: 'Mijn taken' },
+    { tab: 'werklijst', label: 'Werklijst' },
+    { tab: 'planning', label: 'Planning', groep: 'Planning & sturing' },
+    { tab: 'kritiekpad', label: 'Kritiek pad', groep: 'Planning & sturing' },
+    { tab: 'taken', label: 'Taken', groep: 'Planning & sturing' },
+    { tab: 'vergunningen', label: 'Vergunningen', groep: 'Registers' },
+    { tab: 'zro', label: 'ZRO', groep: 'Registers' },
+    { tab: 'onderzoeken', label: 'Onderzoeken', groep: 'Registers' },
+    { tab: 'schouwen', label: 'Schouwen', groep: 'Registers' },
+    { tab: 'tsb', label: 'TSB', groep: 'Registers' },
+    { tab: 'wijzigingen', label: 'Wijzigingen', groep: 'Registers' },
+    { tab: 'uitvoering', label: 'Uitvoering', groep: 'Registers' },
+    { tab: 'rapporten', label: 'Rapporten', groep: 'Organisatie' },
+    { tab: 'beheer', label: 'Beheer', groep: 'Organisatie' },
+  ];
+
   let clerk = null;
   let user = null;
   let devMode = false;
@@ -146,14 +170,33 @@ const Auth = (() => {
   const magWpBewerken = (wpId) => magVolledig() || isToegewezen(wpId);
   const mijnWerkpakketten = () => State.werkpakketten.filter((w) => (State.toewijzingen[w.id] || []).includes(userId));
 
+  // Mag deze gebruiker de opgegeven pagina (tabnaam) zien? 'toewijzen' en
+  // 'accounts' blijven puur rolgebonden. Voor de overige pagina's geldt: geen
+  // expliciete restrictie in State.paginaRechten → alles zichtbaar (backward
+  // compatible), anders alleen de pagina's die daarin staan.
+  function magPagina(tab) {
+    if (devMode) return true;
+    if (tab === 'toewijzen') return magToewijzen();
+    if (tab === 'accounts') return magAccounts();
+    const lijst = (State.paginaRechten || {})[userId];
+    if (!lijst) return true;
+    return lijst.includes(tab);
+  }
+  // Eerste pagina die deze gebruiker mag zien, als startpunt na inloggen.
+  function eersteToegestaneTab() {
+    const p = PAGINAS.find((p) => magPagina(p.tab));
+    return p ? p.tab : 'overzicht';
+  }
+
   return {
     init, montUserButton, koppelGebruiker, herlaadRol, naam, huidigeGebruiker,
-    ROLLEN, ROL_LABELS, VOLLEDIG,
+    ROLLEN, ROL_LABELS, VOLLEDIG, PAGINAS,
     get ingelogd() { return ingelogd; },
     get devMode() { return devMode; },
     get userId() { return userId; },
     get role() { return role; },
     magVolledig, magToewijzen, magAccounts, isToegewezen, magWpBewerken, mijnWerkpakketten,
+    magPagina, eersteToegestaneTab,
   };
 })();
 

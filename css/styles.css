@@ -947,6 +947,15 @@ input:disabled,select:disabled{background:var(--line-2);color:var(--faint);curso
 /* Accounts */
 .acc-ik{font-size:10px;font-weight:700;background:var(--groen-soft);color:var(--groen-ink);border-radius:999px;padding:2px 7px;margin-left:6px;text-transform:uppercase}
 .acc-rol{min-width:150px}
+.acc-pag-knop{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.acc-pag-knop:hover{border-color:var(--accent-2)}
+.acc-pag-rij td{background:var(--panel-2)}
+.acc-pag-paneel{padding:6px 2px}
+.acc-pag-alle{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;margin-bottom:10px}
+.acc-pag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 16px}
+.acc-pag-groep{grid-column:1/-1;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--sub);font-weight:700;margin:8px 0 2px}
+.acc-pag-groep:first-child{margin-top:0}
+.acc-pag-item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2);padding:3px 0}
 
 /* Stapondersteuning: op te leveren producten & tips per activiteit */
 .act-oplever{margin:6px 0 8px 95px;background:var(--accent-soft);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px}

@@ -280,6 +280,33 @@ function renderToewijzen() {
 }
 
 /* -------------------------------- Accounts ------------------------------- */
+let accPaginaOpenUid = null;   // welke gebruiker heeft het paginarechten-paneel open
+
+function accPaginaLabel(uid) {
+  const lijst = State.paginaRechten[uid];
+  if (!lijst) return "Alle pagina's";
+  return `${lijst.length} van ${Auth.PAGINAS.length} pagina's`;
+}
+
+// Paneel met per-pagina checkboxes voor één gebruiker, gegroepeerd zoals de
+// zijbalk. 'Alle pagina's' is de standaard (geen restrictie, backward
+// compatible); zet 'm uit om per pagina te kiezen wat deze gebruiker mag zien.
+function accPaginaPaneel(uid) {
+  const lijst = State.paginaRechten[uid];
+  const alle = !lijst;
+  const zichtbaar = new Set(lijst || Auth.PAGINAS.map((p) => p.tab));
+  let laatsteGroep = null;
+  const items = Auth.PAGINAS.map((p) => {
+    let kop = '';
+    if (p.groep !== laatsteGroep) { if (p.groep) kop = `<div class="acc-pag-groep">${htmlEsc(p.groep)}</div>`; laatsteGroep = p.groep; }
+    return `${kop}<label class="acc-pag-item"><input type="checkbox" class="acc-pag-cb" data-uid="${htmlEsc(uid)}" data-tab="${p.tab}"${zichtbaar.has(p.tab) ? ' checked' : ''}${alle ? ' disabled' : ''}> ${htmlEsc(p.label)}</label>`;
+  }).join('');
+  return `<div class="acc-pag-paneel">
+    <label class="acc-pag-alle"><input type="checkbox" class="acc-pag-alle-cb" data-uid="${htmlEsc(uid)}"${alle ? ' checked' : ''}> Alle pagina's (standaard)</label>
+    <div class="acc-pag-grid">${items}</div>
+  </div>`;
+}
+
 function renderAccounts() {
   const cont = el('#accountsInhoud');
   if (!cont) return;
@@ -292,20 +319,23 @@ function renderAccounts() {
   const rows = users.map((u) => {
     const opts = Auth.ROLLEN.map((r) => `<option value="${r}"${r === u.role ? ' selected' : ''}>${Auth.ROL_LABELS[r]}</option>`).join('');
     const ik = u.id === Auth.userId ? ' <span class="acc-ik">jij</span>' : '';
+    const open = accPaginaOpenUid === u.id;
     return `<tr>
       <td><strong>${htmlEsc(u.naam)}</strong>${ik}</td>
       <td class="sub">${htmlEsc(u.email || '—')}</td>
       <td class="num">${aantalWpVan(u.id)}</td>
       <td>${u.sinds ? fmtDatum(u.sinds) : '—'}</td>
       <td><select class="acc-rol" data-uid="${htmlEsc(u.id)}">${opts}</select></td>
-    </tr>`;
+      <td><button type="button" class="acc-pag-knop" data-uid="${htmlEsc(u.id)}">${htmlEsc(accPaginaLabel(u.id))} ${open ? '▴' : '▾'}</button></td>
+    </tr>
+    <tr class="acc-pag-rij"${open ? '' : ' hidden'}><td colspan="6">${open ? accPaginaPaneel(u.id) : ''}</td></tr>`;
   }).join('');
 
   cont.innerHTML = `<div class="card">
-    <p class="sub">Ken rollen toe. <strong>Ontwerpleider</strong> en <strong>Manager</strong> mogen alles bewerken, toewijzen en accounts beheren. De overige rollen bewerken alleen hun toegewezen werkpakketten. Gebruikers verschijnen automatisch zodra ze voor het eerst inloggen.</p>
+    <p class="sub">Ken rollen toe. <strong>Ontwerpleider</strong> en <strong>Manager</strong> mogen alles bewerken, toewijzen en accounts beheren. De overige rollen bewerken alleen hun toegewezen werkpakketten. Gebruikers verschijnen automatisch zodra ze voor het eerst inloggen. Met <strong>Pagina's</strong> bepaal je per gebruiker welke pagina's zichtbaar zijn (in het menu én rechtstreeks) — <em>Toewijzen</em> en <em>Accounts</em> blijven altijd rolgebonden.</p>
     <div class="tabel-wrap"><table class="tabel">
-      <thead><tr><th>Naam</th><th>E-mail</th><th class="num">Toegewezen WP's</th><th>Sinds</th><th>Rol</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5" class="leeg">Nog geen gebruikers bekend.</td></tr>'}</tbody>
+      <thead><tr><th>Naam</th><th>E-mail</th><th class="num">Toegewezen WP's</th><th>Sinds</th><th>Rol</th><th>Pagina's</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" class="leeg">Nog geen gebruikers bekend.</td></tr>'}</tbody>
     </table></div>
   </div>`;
 
@@ -323,6 +353,33 @@ function renderAccounts() {
     if (uid === Auth.userId) { Auth.herlaadRol(); gateUI(); render(); }
     renderAccounts();
     toast(`${u.naam} is nu ${Auth.ROL_LABELS[nieuw]}`, 'ok');
+  }));
+
+  els('#accountsInhoud .acc-pag-knop').forEach((b) => b.addEventListener('click', () => {
+    const uid = b.dataset.uid;
+    accPaginaOpenUid = accPaginaOpenUid === uid ? null : uid;
+    renderAccounts();
+  }));
+
+  els('#accountsInhoud .acc-pag-alle-cb').forEach((cb) => cb.addEventListener('change', (e) => {
+    const uid = e.target.dataset.uid;
+    if (e.target.checked) delete State.paginaRechten[uid];
+    else State.paginaRechten[uid] = Auth.PAGINAS.map((p) => p.tab);
+    State.bewaar();
+    if (uid === Auth.userId) { gateUI(); if (!Auth.magPagina(huidigeTabNaam())) toonTab(Auth.eersteToegestaneTab()); }
+    renderAccounts();
+  }));
+
+  els('#accountsInhoud .acc-pag-cb').forEach((cb) => cb.addEventListener('change', (e) => {
+    const { uid, tab } = e.target.dataset;
+    const lijst = State.paginaRechten[uid] || Auth.PAGINAS.map((p) => p.tab);
+    const nieuw = e.target.checked ? [...new Set([...lijst, tab])] : lijst.filter((t) => t !== tab);
+    if (!nieuw.length) { toast('Er moet minstens één pagina zichtbaar blijven', 'fout'); e.target.checked = true; return; }
+    State.paginaRechten[uid] = nieuw;
+    State.bewaar();
+    if (uid === Auth.userId) { gateUI(); if (!Auth.magPagina(huidigeTabNaam())) toonTab(Auth.eersteToegestaneTab()); }
+    renderAccounts();
+    toast(`Paginarechten van ${(State.gebruikers[uid] || {}).naam || uid} bijgewerkt`, 'ok');
   }));
 }
 
