@@ -282,6 +282,53 @@ function renderToewijzen() {
 /* -------------------------------- Accounts ------------------------------- */
 let accPaginaOpenUid = null;   // welke gebruiker heeft het paginarechten-paneel open
 
+// Uitnodigingsformulier (nieuwe gebruiker bestaat nog niet, dus deze twee
+// staan los van State — pas bij versturen gaan ze mee in de POST).
+let inviteOpen = false;            // paginarechten-paneel van het formulier open?
+let invitePaginaRechten = null;    // null = alle pagina's (standaard), anders array van tabs
+let inviteEmail = '';
+let inviteRol = 'engineer';
+let uitnodigingen = { laden: false, data: null, fout: null };
+
+// Haalt de openstaande uitnodigingen op bij Clerk (via api/uitnodigen.js).
+// Clerk is hier de bron van waarheid: er wordt niets van bijgehouden in State.
+async function laadUitnodigingen() {
+  if (uitnodigingen.laden) return;
+  uitnodigingen.laden = true;
+  try {
+    const token = await Auth.sessionToken();
+    const r = await fetch('/api/uitnodigen', { headers: token ? { authorization: `Bearer ${token}` } : {} });
+    const d = await r.json().catch(() => ({}));
+    uitnodigingen = r.ok ? { laden: false, data: d.uitnodigingen || [], fout: null } : { laden: false, data: null, fout: d.error || 'Onbekende fout' };
+  } catch (e) {
+    uitnodigingen = { laden: false, data: null, fout: e.message };
+  }
+  renderAccounts();
+}
+
+function invitePaginaLabel() {
+  if (!invitePaginaRechten) return "Alle pagina's";
+  return `${invitePaginaRechten.length} van ${Auth.PAGINAS.length} pagina's`;
+}
+
+// Paginarechten-paneel voor het uitnodigingsformulier — zelfde opzet als
+// accPaginaPaneel(), maar tegen invitePaginaRechten i.p.v. State (de
+// gebruiker bestaat nog niet).
+function invitePaginaPaneel() {
+  const alle = !invitePaginaRechten;
+  const zichtbaar = new Set(invitePaginaRechten || Auth.PAGINAS.map((p) => p.tab));
+  let laatsteGroep = null;
+  const items = Auth.PAGINAS.map((p) => {
+    let kop = '';
+    if (p.groep !== laatsteGroep) { if (p.groep) kop = `<div class="acc-pag-groep">${htmlEsc(p.groep)}</div>`; laatsteGroep = p.groep; }
+    return `${kop}<label class="acc-pag-item"><input type="checkbox" class="inv-pag-cb" data-tab="${p.tab}"${zichtbaar.has(p.tab) ? ' checked' : ''}${alle ? ' disabled' : ''}> ${htmlEsc(p.label)}</label>`;
+  }).join('');
+  return `<div class="acc-pag-paneel">
+    <label class="acc-pag-alle"><input type="checkbox" class="inv-pag-alle-cb"${alle ? ' checked' : ''}> Alle pagina's (standaard)</label>
+    <div class="acc-pag-grid">${items}</div>
+  </div>`;
+}
+
 function accPaginaLabel(uid) {
   const lijst = State.paginaRechten[uid];
   if (!lijst) return "Alle pagina's";
@@ -312,6 +359,36 @@ function renderAccounts() {
   if (!cont) return;
   if (!Auth.magAccounts()) { cont.innerHTML = '<div class="card"><div class="leeg">Je hebt geen rechten voor accountbeheer.</div></div>'; return; }
 
+  if (!Auth.devMode && uitnodigingen.data === null && !uitnodigingen.fout && !uitnodigingen.laden) laadUitnodigingen();
+
+  const uitnodigenHtml = Auth.devMode
+    ? `<div class="card"><p class="sub">Gebruikers uitnodigen per e-mail vereist een geconfigureerde Clerk-login (devmodus staat dit niet toe).</p></div>`
+    : `<div class="card" id="inviteKaart">
+        <div class="card-kop"><h2>Nieuwe gebruiker uitnodigen</h2><span class="hint">stuurt een uitnodigingsmail met een link om een account aan te maken</span></div>
+        <div class="rapport-config">
+          <div class="veld"><label>E-mailadres</label><input type="email" id="invEmail" placeholder="naam@bedrijf.nl" autocomplete="off" value="${htmlEsc(inviteEmail)}"></div>
+          <div class="veld"><label>Rol</label><select id="invRol">${Auth.ROLLEN.map((r) => `<option value="${r}"${r === inviteRol ? ' selected' : ''}>${Auth.ROL_LABELS[r]}</option>`).join('')}</select></div>
+          <div class="veld"><button type="button" class="acc-pag-knop" id="invPagKnop">${htmlEsc(invitePaginaLabel())} ${inviteOpen ? '▴' : '▾'}</button></div>
+          <div class="veld"><button type="button" class="primair" id="invVerstuur">Uitnodiging versturen</button></div>
+        </div>
+        ${inviteOpen ? invitePaginaPaneel() : ''}
+      </div>
+      <div class="card">
+        <div class="card-kop"><h2>Openstaande uitnodigingen</h2></div>
+        ${uitnodigingen.laden ? '<div class="leeg">Bezig met laden…</div>'
+          : uitnodigingen.fout ? `<div class="leeg">Kon uitnodigingen niet laden: ${htmlEsc(uitnodigingen.fout)}</div>`
+          : !uitnodigingen.data.length ? '<div class="leeg">Geen openstaande uitnodigingen.</div>'
+          : `<div class="tabel-wrap"><table class="tabel">
+              <thead><tr><th>E-mail</th><th>Rol</th><th>Uitgenodigd op</th><th></th></tr></thead>
+              <tbody>${uitnodigingen.data.map((u) => `<tr>
+                <td>${htmlEsc(u.email)}</td>
+                <td>${htmlEsc(Auth.ROL_LABELS[u.rol] || u.rol || '—')}</td>
+                <td>${u.aangemaakt ? fmtDatum(u.aangemaakt) : '—'}</td>
+                <td><button type="button" class="verwijder-knop inv-intrek" data-id="${htmlEsc(u.id)}">intrekken</button></td>
+              </tr>`).join('')}</tbody>
+            </table></div>`}
+      </div>`;
+
   const users = Object.values(State.gebruikers).sort((a, b) => a.naam.localeCompare(b.naam));
   const aantalWpVan = (uid) => Object.values(State.toewijzingen).filter((l) => l.includes(uid)).length;
   const beheerders = users.filter((u) => Auth.VOLLEDIG.includes(u.role)).length;
@@ -331,7 +408,7 @@ function renderAccounts() {
     <tr class="acc-pag-rij"${open ? '' : ' hidden'}><td colspan="6">${open ? accPaginaPaneel(u.id) : ''}</td></tr>`;
   }).join('');
 
-  cont.innerHTML = `<div class="card">
+  cont.innerHTML = uitnodigenHtml + `<div class="card">
     <p class="sub">Ken rollen toe. <strong>Ontwerpleider</strong> en <strong>Manager</strong> mogen alles bewerken, toewijzen en accounts beheren. De overige rollen bewerken alleen hun toegewezen werkpakketten. Gebruikers verschijnen automatisch zodra ze voor het eerst inloggen. Met <strong>Pagina's</strong> bepaal je per gebruiker welke pagina's zichtbaar zijn (in het menu én rechtstreeks) — <em>Toewijzen</em> en <em>Accounts</em> blijven altijd rolgebonden.</p>
     <div class="tabel-wrap"><table class="tabel">
       <thead><tr><th>Naam</th><th>E-mail</th><th class="num">Toegewezen WP's</th><th>Sinds</th><th>Rol</th><th>Pagina's</th></tr></thead>
@@ -355,7 +432,7 @@ function renderAccounts() {
     toast(`${u.naam} is nu ${Auth.ROL_LABELS[nieuw]}`, 'ok');
   }));
 
-  els('#accountsInhoud .acc-pag-knop').forEach((b) => b.addEventListener('click', () => {
+  els('#accountsInhoud .acc-pag-knop[data-uid]').forEach((b) => b.addEventListener('click', () => {
     const uid = b.dataset.uid;
     accPaginaOpenUid = accPaginaOpenUid === uid ? null : uid;
     renderAccounts();
@@ -380,6 +457,73 @@ function renderAccounts() {
     if (uid === Auth.userId) { gateUI(); if (!Auth.magPagina(huidigeTabNaam())) toonTab(Auth.eersteToegestaneTab()); }
     renderAccounts();
     toast(`Paginarechten van ${(State.gebruikers[uid] || {}).naam || uid} bijgewerkt`, 'ok');
+  }));
+
+  /* ---- Uitnodigingsformulier ---- */
+  const invEmailVeld = el('#invEmail');
+  if (invEmailVeld) invEmailVeld.addEventListener('input', (e) => { inviteEmail = e.target.value; });
+  const invRolVeld = el('#invRol');
+  if (invRolVeld) invRolVeld.addEventListener('change', (e) => { inviteRol = e.target.value; });
+
+  const invPagKnop = el('#invPagKnop');
+  if (invPagKnop) invPagKnop.addEventListener('click', () => { inviteOpen = !inviteOpen; renderAccounts(); });
+
+  els('#accountsInhoud .inv-pag-alle-cb').forEach((cb) => cb.addEventListener('change', (e) => {
+    invitePaginaRechten = e.target.checked ? null : Auth.PAGINAS.map((p) => p.tab);
+    renderAccounts();
+  }));
+  els('#accountsInhoud .inv-pag-cb').forEach((cb) => cb.addEventListener('change', (e) => {
+    const tab = e.target.dataset.tab;
+    const lijst = invitePaginaRechten || Auth.PAGINAS.map((p) => p.tab);
+    const nieuw = e.target.checked ? [...new Set([...lijst, tab])] : lijst.filter((t) => t !== tab);
+    if (!nieuw.length) { toast('Er moet minstens één pagina zichtbaar blijven', 'fout'); e.target.checked = true; return; }
+    invitePaginaRechten = nieuw;
+    renderAccounts();
+  }));
+
+  const invVerstuur = el('#invVerstuur');
+  if (invVerstuur) invVerstuur.addEventListener('click', async () => {
+    const email = inviteEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Vul een geldig e-mailadres in', 'fout'); return; }
+    invVerstuur.disabled = true; invVerstuur.textContent = 'Bezig…';
+    try {
+      const token = await Auth.sessionToken();
+      const r = await fetch('/api/uitnodigen', {
+        method: 'POST',
+        headers: Object.assign({ 'content-type': 'application/json' }, token ? { authorization: `Bearer ${token}` } : {}),
+        body: JSON.stringify({ email, rol: inviteRol, paginaRechten: invitePaginaRechten }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast(d.error || 'Uitnodigen mislukt', 'fout'); return; }
+      toast(`Uitnodiging verstuurd naar ${email}`, 'ok');
+      inviteEmail = ''; inviteRol = 'engineer'; invitePaginaRechten = null; inviteOpen = false;
+      uitnodigingen = { laden: false, data: null, fout: null };
+      renderAccounts();
+    } catch (e) {
+      toast('Uitnodigen mislukt: ' + e.message, 'fout');
+    } finally {
+      invVerstuur.disabled = false; invVerstuur.textContent = 'Uitnodiging versturen';
+    }
+  });
+
+  els('#accountsInhoud .inv-intrek').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.dataset.id;
+    b.disabled = true;
+    try {
+      const token = await Auth.sessionToken();
+      const r = await fetch(`/api/uitnodigen?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast(d.error || 'Intrekken mislukt', 'fout'); b.disabled = false; return; }
+      toast('Uitnodiging ingetrokken', 'ok');
+      uitnodigingen = { laden: false, data: null, fout: null };
+      renderAccounts();
+    } catch (e) {
+      toast('Intrekken mislukt: ' + e.message, 'fout');
+      b.disabled = false;
+    }
   }));
 }
 

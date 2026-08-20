@@ -133,8 +133,17 @@ const Auth = (() => {
       const geenBeheerder = !Object.values(State.gebruikers).some((x) => VOLLEDIG.includes(x.role));
       const adminEmails = (window.HVP_ADMIN_EMAILS || []).map((s) => String(s).toLowerCase());
       const bootstrap = geenBeheerder || adminEmails.includes(email.toLowerCase());
-      g = { id: userId, email, naam, role: bootstrap ? 'manager' : 'engineer', sinds: isoDatum(new Date()) };
+      // Rol/paginarechten uit een uitnodiging (Accounts → "Nieuwe gebruiker
+      // uitnodigen") staan als public_metadata op de Clerk-gebruiker en
+      // overschrijven hier de standaard 'engineer', zodat een uitgenodigde
+      // gebruiker meteen met de vooraf ingestelde rechten binnenkomt.
+      const meta = user.publicMetadata || {};
+      const uitgenodigdeRol = ROLLEN.includes(meta.rol) ? meta.rol : null;
+      g = { id: userId, email, naam, role: bootstrap ? 'manager' : (uitgenodigdeRol || 'engineer'), sinds: isoDatum(new Date()) };
       State.gebruikers[userId] = g;
+      if (!bootstrap && Array.isArray(meta.paginaRechten) && meta.paginaRechten.length) {
+        State.paginaRechten[userId] = meta.paginaRechten;
+      }
       State.bewaar();
     } else if (g.email !== email || g.naam !== naam) {
       g.email = email; g.naam = naam; State.bewaar();
@@ -154,6 +163,13 @@ const Auth = (() => {
   function toonRolBadge() {
     const b = document.getElementById('rolBadge');
     if (b) { b.textContent = ROL_LABELS[role] || role; b.dataset.rol = role; }
+  }
+
+  // Sessietoken voor server-side verificatie (bv. bij api/uitnodigen.js).
+  // null in devmodus — daar is er geen Clerk-sessie.
+  async function sessionToken() {
+    if (devMode || !clerk || !clerk.session) return null;
+    try { return await clerk.session.getToken(); } catch { return null; }
   }
 
   function huidigeGebruiker() { return State.gebruikers[userId] || null; }
@@ -189,7 +205,7 @@ const Auth = (() => {
   }
 
   return {
-    init, montUserButton, koppelGebruiker, herlaadRol, naam, huidigeGebruiker,
+    init, montUserButton, koppelGebruiker, herlaadRol, naam, huidigeGebruiker, sessionToken,
     ROLLEN, ROL_LABELS, VOLLEDIG, PAGINAS,
     get ingelogd() { return ingelogd; },
     get devMode() { return devMode; },
